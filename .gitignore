@@ -1,5 +1,5 @@
-#Ignore ChatGPT code files.
-chatgpt-code*
+#Ignore test code files.
+test*
 
 #Ignore the compiled C code.
 threads
