@@ -1,7 +1,18 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sched.h>
+#include <time.h>
+#include <unistd.h>
 
+
+double get_time_ms(){
+struct timespec ts;
+clock_gettime(CLOCK_MONOTONIC, &ts);
+return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
+}
 
 void* displayLetters(void* nichts){
    char char1,char2; 
@@ -40,12 +51,25 @@ void* methFunction( void* ich_bin_echt_gelangweilt){
 
 
 int main() {
-  
+
+    // Define CPU affinity set
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset); // Initialize the CPU set
+    CPU_SET(0, &cpuset); // Assign execution to CPU 0
+
+    double parallel_time;
+    double start, end;
     pthread_t thread1,thread2,thread3;
     
-    pthread_create(&thread1, NULL, displayLetters, NULL);
-    pthread_create(&thread2, NULL, minThreePrintStatements, NULL);
-    pthread_create(&thread3, NULL, methFunction, NULL);
+    pthread_attr_t attr; // Thread attributes
+    pthread_attr_init(&attr); // Initialize thread attributes
+    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+
+    start = get_time_ms(); // Start timing parallel execution
+
+    pthread_create(&thread1, &attr, displayLetters, NULL);
+    pthread_create(&thread2, &attr, minThreePrintStatements, NULL);
+    pthread_create(&thread3, &attr, methFunction, NULL);
     printf("1\n");
     pthread_join(thread1, NULL);
     printf("2\n");
@@ -54,7 +78,9 @@ int main() {
     pthread_join(thread3, NULL);
     printf("4\n");
 
-    
+    end = get_time_ms(); // End timing parallel execution
+    parallel_time = end - start;
+    printf("Total parallel time: %.2f ms\n\n", parallel_time);
     
     printf("Main: Thread has finished executing\n");
     return 0;
