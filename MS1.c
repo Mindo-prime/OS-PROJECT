@@ -70,13 +70,13 @@ int main() {
     pthread_create(&thread1, &attr, displayLetters, NULL);
     pthread_create(&thread2, &attr, minThreePrintStatements, NULL);
     pthread_create(&thread3, &attr, methFunction, NULL);
-    printf("1\n");
+    printf("before thread join 1\n");
     pthread_join(thread1, NULL);
-    printf("2\n");
+    printf("before thread join 2\n");
     pthread_join(thread2, NULL);
-    printf("3\n");
+    printf("before thread join 3\n");
     pthread_join(thread3, NULL);
-    printf("4\n");
+    printf("after thread join 3\n");
 
     end = get_time_ms(); // End timing parallel execution
     parallel_time = end - start;
