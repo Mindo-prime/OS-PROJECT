@@ -80,3 +80,4 @@ int main()
     printf("Main: Thread has finished executing\n");
 
     return 0;
+}
