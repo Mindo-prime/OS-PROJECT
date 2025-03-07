@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#define POLICY SCHED_FIFO
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,11 +60,14 @@ int main() {
 
     double parallel_time;
     double start, end;
+    struct sched_param param;
     pthread_t thread1,thread2,thread3;
-    
     pthread_attr_t attr; // Thread attributes
     pthread_attr_init(&attr); // Initialize thread attributes
     pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+    pthread_attr_setschedpolicy(&attr, POLICY);
+    param.sched_priority = sched_get_priority_max(POLICY);
+    pthread_attr_setschedparam(&attr,&param);
 
     start = get_time_ms(); // Start timing parallel execution
 
@@ -81,7 +85,7 @@ int main() {
     end = get_time_ms(); // End timing parallel execution
     parallel_time = end - start;
     printf("Total parallel time: %.2f ms\n\n", parallel_time);
-    
     printf("Main: Thread has finished executing\n");
+    pthread_attr_destroy(&attr);
     return 0;
 }
