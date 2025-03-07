@@ -6,9 +6,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define POLICY SCHED_FIFO
-//#define POLICY SCHED_RR // this is the other sched polic Round Robin
-
 double get_time_ms()
 {
     struct timespec ts;
@@ -60,14 +57,10 @@ int main()
     CPU_SET(0, &cpuset); 
     double parallel_time;
     double start, end;
-    struct sched_param param;
     pthread_t thread1, thread2, thread3;
     pthread_attr_t attr; 
     pthread_attr_init(&attr); 
     pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); 
-    pthread_attr_setschedpolicy(&attr, POLICY);
-    param.sched_priority = sched_get_priority_max(POLICY);
-    pthread_attr_setschedparam(&attr,&param);
     start = get_time_ms(); 
     pthread_create(&thread1, &attr, displayLetters, NULL);
     pthread_create(&thread2, &attr, minThreePrintStatements, NULL);
@@ -85,6 +78,6 @@ int main()
     parallel_time = end - start;
     printf("Total parallel time: %.2f ms\n\n", parallel_time);
     printf("Main: Thread has finished executing\n");
-    pthread_attr_destroy(&attr);
+
     return 0;
 }
