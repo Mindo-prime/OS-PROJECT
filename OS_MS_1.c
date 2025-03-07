@@ -53,13 +53,13 @@ void* methFunction( void* ich_bin_echt_gelangweilt){
 
 int main() {
 
-    // Define CPU affinity set
-    cpu_set_t cpuset;
+    //Bound the CPU to 1 Core
+    cpu_set_t cpuset; // Define CPU affinity set
     CPU_ZERO(&cpuset); // Initialize the CPU set
     CPU_SET(0, &cpuset); // Assign execution to CPU 0
 
-    double parallel_time;
-    double start, end;
+    double parallel_time; //used for multi-threading time calculation
+    double start , end; 
     struct sched_param param;
     pthread_t thread1,thread2,thread3;
     pthread_attr_t attr; // Thread attributes
@@ -69,7 +69,7 @@ int main() {
     param.sched_priority = sched_get_priority_max(POLICY);
     pthread_attr_setschedparam(&attr,&param);
 
-    start = get_time_ms(); // Start timing parallel execution
+    start = get_time_ms(); // Start timing parallel execution ()
 
     pthread_create(&thread1, &attr, displayLetters, NULL);
     pthread_create(&thread2, &attr, minThreePrintStatements, NULL);
@@ -83,7 +83,7 @@ int main() {
     printf("after thread join 3\n");
 
     end = get_time_ms(); // End timing parallel execution
-    parallel_time = end - start;
+    parallel_time = end - start; //execution time
     printf("Total parallel time: %.2f ms\n\n", parallel_time);
     printf("Main: Thread has finished executing\n");
     pthread_attr_destroy(&attr);

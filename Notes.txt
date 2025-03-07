@@ -1,0 +1,32 @@
+/*
+Release time/arrival time (ri):
+    time instrant at which the task is ready to be executed
+
+deadline/completion time (di):
+    time instant where the execution of the task must be completed
+    
+relative deadline (Di): 
+    time difference between the release time and the deadline
+                    Di = di - ri
+
+execution/service/burst time (ei):
+    the time required for the processor to execute the task
+                    ei = end of exec. - start of exec.
+reponse time (Ri):
+    time difference between the release time and the start of execution
+                    Ri = si - ri
+
+turnaround time (TAi):
+    time difference between the release time and the end of execution
+                    TAi = fi - ri
+
+wait time (Wi): 
+    any in-between delays in the execution of task caused by the scheduler 
+                    Wi = TAi - ei
+timeslice (Tsi):
+    the allocated to a process to be executed on the cpu 
+                    Sum(Tsi) = ei
+
+useful cpu work:
+    CPUi = ei / ei + Sum(Wi)
+*/
