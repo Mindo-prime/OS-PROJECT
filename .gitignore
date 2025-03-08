@@ -1,0 +1,5 @@
+#Ignore test code files.
+test*
+
+#Ignore the compiled C code.
+threads
