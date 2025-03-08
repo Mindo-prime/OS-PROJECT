@@ -52,14 +52,43 @@ int main() {
     CPU_SET(0, &cpuset); // Assign execution to CPU 0
 
     pthread_t t1, t2, t3;
-    pthread_attr_t attr; // Thread attributes
+    pthread_attr_t attr1,attr2; // Thread attributes
+    struct sched_param param;
+    int ret;
 
-    pthread_attr_init(&attr); // Initialize thread attributes
-    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+    pthread_attr_init(&attr1); // Initialize thread attributes
+    ret = pthread_attr_setschedpolicy(&attr1, SCHED_FIFO);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling policy (SCHED_FIFO)");
+    }
+    param.sched_priority = 1; // Example priority; adjust as needed
 
-    pthread_create(&t1, &attr, thread1, NULL);
-    pthread_create(&t2, &attr, thread2, NULL);
-    pthread_create(&t3, &attr, thread3, NULL);
+    ret = pthread_attr_setschedparam(&attr1, &param);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling parameter");
+    }
+    pthread_attr_setinheritsched(&attr1, PTHREAD_EXPLICIT_SCHED);
+
+    pthread_attr_init(&attr2); // Initialize thread attributes
+    ret = pthread_attr_setschedpolicy(&attr2, SCHED_RR);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling policy (SCHED_FIFO)");
+    }
+    param.sched_priority = 1; // Example priority; adjust as needed
+
+    ret = pthread_attr_setschedparam(&attr2, &param);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling parameter");
+    }
+    pthread_attr_setinheritsched(&attr2, PTHREAD_EXPLICIT_SCHED);
+
+
+    pthread_attr_setaffinity_np(&attr1, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+    pthread_attr_setaffinity_np(&attr2, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+
+    pthread_create(&t1, &attr1, thread1, NULL);
+    pthread_create(&t2, &attr1, thread2, NULL);
+    pthread_create(&t3, &attr2, thread3, NULL);
 
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
