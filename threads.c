@@ -45,6 +45,10 @@ void* thread3(void* args) {
     printf("The product of the two integers is %d", product);
 }
 
+void testLoop() {
+    for (int i = 0; i < __INT_MAX__; i++) {}
+}
+
 int main() {
     // Define CPU affinity set
     cpu_set_t cpuset;
@@ -88,7 +92,11 @@ int main() {
 
     pthread_create(&t1, &attr1, thread1, NULL);
     pthread_create(&t2, &attr1, thread2, NULL);
-    pthread_create(&t3, &attr2, thread3, NULL);
+    pthread_create(&t3, &attr1, thread3, NULL);
+
+    // pthread_create(&t1, &attr1, thread1, NULL);
+    // pthread_create(&t2, &attr1, thread2, NULL);
+    // pthread_create(&t3, &attr1, thread3, NULL);
 
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
