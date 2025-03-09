@@ -78,6 +78,9 @@ void* displayLetters(void* args){
     // Record CPU time used
     metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
 
+    // Record Response time
+    metrics->response_time = metrics->start_time - release_time;
+
     // Record finish time
     metrics->end_time = get_time_ms();
     
@@ -91,7 +94,7 @@ void* displayLetters(void* args){
     metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
     
     // Get memory usage
-    metrics->memory_usage = malloc_usable_size(metrics);
+    //metrics->memory_usage = malloc_usable_size(metrics);
     
     // Calculate elapsed CPU time
     double *cpu_time = malloc(sizeof(double));
@@ -134,6 +137,9 @@ void* minThreePrintStatements( void* args){
     // Record CPU time used
     metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
 
+    // Record Response time
+    metrics->response_time = metrics->start_time - release_time;
+
     // Record finish time
     metrics->end_time = get_time_ms();
     
@@ -147,7 +153,7 @@ void* minThreePrintStatements( void* args){
     metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
     
     // Get memory usage
-    metrics->memory_usage = malloc_usable_size(metrics);
+    //metrics->memory_usage = malloc_usable_size(metrics);
     
     // Calculate elapsed CPU time
     double *cpu_time = malloc(sizeof(double));
@@ -197,6 +203,9 @@ void* methFunction( void* args){
     // Record CPU time used
     metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
 
+    // Record Response time
+    metrics->response_time = metrics->start_time - release_time;
+
     // Record finish time
     metrics->end_time = get_time_ms();
     
@@ -210,7 +219,7 @@ void* methFunction( void* args){
     metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
     
     // Get memory usage
-    metrics->memory_usage = malloc_usable_size(metrics);
+    //metrics->memory_usage = malloc_usable_size(metrics);
     
     // Calculate elapsed CPU time
     double *cpu_time = malloc(sizeof(double));
@@ -247,7 +256,7 @@ int main() {
     param.sched_priority = sched_get_priority_max(POLICY);
     pthread_attr_setschedparam(&attr,&param);
 
-    double release_time = get_time_ms(); // Start timing parallel execution 
+    double release_time = get_time_ms();// Start timing parallel execution 
 
     pthread_create(&thread1, &attr, displayLetters, &thread1_metrics);
     pthread_create(&thread2, &attr, minThreePrintStatements, &thread2_metrics);
@@ -307,10 +316,10 @@ int main() {
     printf("CPU Utilization for all: %f ms\n\n", (thread1_metrics.cpu_utilization + thread2_metrics.cpu_utilization + thread3_metrics.cpu_utilization)/3); // 9
 
     // For the Memory Consumption
-    printf("Memory Consumption 1: %f ms\n\n", thread1_metrics.memory_usage); // 10
-    printf("Memory Consumption 2: %f ms\n\n", thread2_metrics.memory_usage); // 11
-    printf("Memory Consumption 3: %f ms\n\n", thread3_metrics.memory_usage); // 12
-    printf("Memory Consumption: %f ms\n\n", total_memory_consumption); // 13
+    printf("Memory Consumption 1: %ld \n\n", thread1_metrics.memory_usage); // 10
+    printf("Memory Consumption 2: %ld \n\n", thread2_metrics.memory_usage); // 11
+    printf("Memory Consumption 3: %ld \n\n", thread3_metrics.memory_usage); // 12
+    printf("Memory Consumption: %f \n\n", total_memory_consumption); // 13
 
     printf("Total Elapsed Time: %f ms\n\n", elapsed_time);
 
