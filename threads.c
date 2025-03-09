@@ -11,10 +11,7 @@ void* thread1(void* arg);
 void* thread2(void* args);
 void* thread3(void* args);
 double get_time_ms();
-
-void testLoop() {
-    for (int i = 0; i < __INT_MAX__; i++) {}
-}
+void testLoop();
 
 int main() {
     // Define CPU affinity set
@@ -114,4 +111,8 @@ double get_time_ms() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6; // Convert to milliseconds
+}
+
+void testLoop() {
+    for (int i = 0; i < __INT_MAX__; i++) {}
 }
