@@ -28,5 +28,5 @@ timeslice (Tsi):
                     Sum(Tsi) = ei
 
 useful cpu work:
-    CPUi = ei / ei + Sum(Wi)
+    CPUi = ei / (ei + Sum(Wi)) = ei / TAti
 */
