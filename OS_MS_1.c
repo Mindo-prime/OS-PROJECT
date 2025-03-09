@@ -87,7 +87,7 @@ void* minThreePrintStatements( void* args){
     printf("minThreeprintStatements() is executing, this is the last print with thread ID: %lu\n", (unsigned long) pthread_self());
     
     Specs -> end_time = get_time_ms();
-    Specs -> memory_usage = malloc_usable_size(Specs);
+    Specs -> memory_usage = sizeof(thread_Specs_s);
     pthread_exit(NULL);
 }
 
