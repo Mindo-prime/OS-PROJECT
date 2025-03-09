@@ -24,10 +24,25 @@ double get_time_ms(){
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
 }
 
-void* displayLetters(void* args){
+double timespec_to_ms(struct timespec *ts) {
+    return (double)ts->tv_sec * 1000.0 + (double)ts->tv_nsec / 1000000.0;
+}
 
+void dummy_loop(){
+    int sum = 0;
+    for(int i = 0; i<1e10; i++){
+        sum += 1;
+    }
+}
+
+void* displayLetters(void* args){
+    struct timespec start_exe, end_exe;
     thread_Specs_s *Specs = (thread_Specs_s*) args;
     Specs -> start_time = get_time_ms();
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start_exe) == -1) {
+        perror("clock_gettime start");
+        return NULL;
+    }
 
     char char1,char2;
     printf("Enter two alphabetic characters\n");
@@ -38,8 +53,26 @@ void* displayLetters(void* args){
         printf("%c\n", c);
     }
 
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end_exe) == -1) {
+        perror("clock_gettime end");
+        return NULL;
+    }
+    
+    dummy_loop();
+
     Specs -> end_time = get_time_ms();
     Specs -> memory_usage = malloc_usable_size(Specs);
+    
+    
+    // Calculate elapsed CPU time
+    double *cpu_time = malloc(sizeof(double));
+    if (cpu_time == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+    
+    *cpu_time = timespec_to_ms(&end_exe) - timespec_to_ms(&start_exe);
+    printf("$d /n",&cpu_time);
     pthread_exit(NULL);
     
 }
@@ -94,7 +127,7 @@ int main() {
     double memory_usage1, memory_usage2, memory_usage3;
     double start_exec, end_exec, total_exec_time;
     double waiting_time, response_time, turnaround_time;
-    double cpu_useful_work, cpu_utilization, total_memory_consumption;
+    double cpu_utilization, total_memory_consumption;
     thread_Specs_s Specs1, Specs2, Specs3;
 
     struct sched_param param;
@@ -140,7 +173,7 @@ int main() {
 
     response_time = start_exec - start;
     turnaround_time = end_exec - start;
-    cpu_useful_work = total_exec_time / (total_exec_time);
+    
 
     printf("Execution Time: %.2f ms\n\n", total_exec_time); // 1
     printf("Release Time: %.2f ms\n\n", start); // 2
@@ -157,8 +190,7 @@ int main() {
     // For the Turnaround Time
     printf("Turnaround Time: %.2f ms\n\n", turnaround_time); // 7
 
-    // For the CPU useful work
-    printf("CPU Useful Work: %.2f ms\n\n", cpu_useful_work); // 8
+    // 8
 
     // For the CPU utilization
     printf("CPU Utilization: %.2f ms\n\n", cpu_utilization); // 9
