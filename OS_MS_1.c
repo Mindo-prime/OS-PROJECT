@@ -1,6 +1,6 @@
 #define _GNU_SOURCE
 #define POLICY SCHED_FIFO
-//#define POLICY SCHED_RR
+// #define POLICY SCHED_RR
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,12 +8,14 @@
 #include <sched.h>
 #include <time.h>
 #include <unistd.h>
+#include <malloc.h>
 
-// Define a structure to hold the start and end times
+// Define a Structure to hold the Start and End times along with the Memory Usage of a Thread
 typedef struct {
     double start_time;
     double end_time;
-} thread_time_t;
+    size_t memory_usage;
+} thread_Specs_s;
 
 // Function to get the current time in milliseconds
 double get_time_ms(){
@@ -24,8 +26,8 @@ double get_time_ms(){
 
 void* displayLetters(void* args){
 
-    thread_time_t *time = (thread_time_t*) args;
-    time -> start_time = get_time_ms();
+    thread_Specs_s *Specs = (thread_Specs_s*) args;
+    Specs -> start_time = get_time_ms();
 
     char char1,char2;
     printf("Enter two alphabetic characters\n");
@@ -36,28 +38,30 @@ void* displayLetters(void* args){
         printf("%c\n", c);
     }
 
-    time -> end_time = get_time_ms();
+    Specs -> end_time = get_time_ms();
+    Specs -> memory_usage = malloc_usable_size(Specs);
     pthread_exit(NULL);
     
 }
 
 void* minThreePrintStatements( void* args){
     
-    thread_time_t *time = (thread_time_t*) args;
-    time -> start_time = get_time_ms();
+    thread_Specs_s *Specs = (thread_Specs_s*) args;
+    Specs -> start_time = get_time_ms();
 
     printf("minThreeprintStatements() is executing, this is the first print\n");
     printf("minThreeprintStatements() is executing, this is the second print\n");
     printf("minThreeprintStatements() is executing, this is the last print with thread ID: %lu\n", (unsigned long) pthread_self());
     
-    time -> end_time = get_time_ms();
+    Specs -> end_time = get_time_ms();
+    Specs -> memory_usage = malloc_usable_size(Specs);
     pthread_exit(NULL);
 }
 
 void* methFunction( void* args){
     
-    thread_time_t *time = (thread_time_t*) args;
-    time -> start_time = get_time_ms();
+    thread_Specs_s *Specs = (thread_Specs_s*) args;
+    Specs -> start_time = get_time_ms();
 
     int n1,n2;
     printf("enter two numbers please\n");
@@ -72,24 +76,26 @@ void* methFunction( void* args){
     }
     printf("The sum of all numbers between %d %d is %d\nwhile the average is %lf while the product is %lu\n",lb,ub,sum,avg,product);
     
-    time -> end_time = get_time_ms();
+    Specs -> end_time = get_time_ms();
+    Specs -> memory_usage = malloc_usable_size(Specs);
     pthread_exit(NULL);
 }
 
 
 int main() {
 
-    //Bound the CPU to 1 Core
+    // Bound the CPU to 1 Core
     cpu_set_t cpuset; // Define CPU affinity set
     CPU_ZERO(&cpuset); // Initialize the CPU set
     CPU_SET(0, &cpuset); // Assign execution to CPU 0
 
-    double elapsed_time; //used for multi-threading time calculation
-    double start, end, exec_time1, exec_time2, exec_time3; //start==release time
+    double elapsed_time; // used for multi-threading time calculation
+    double start, end, exec_time1, exec_time2, exec_time3; // start is the Release Time
+    double memory_usage1, memory_usage2, memory_usage3;
     double start_exec, end_exec, total_exec_time;
     double waiting_time, response_time, turnaround_time;
-    double cpu_useful_work, cpu_utilization, memory_consumption;
-    thread_time_t time1, time2, time3;
+    double cpu_useful_work, cpu_utilization, total_memory_consumption;
+    thread_Specs_s Specs1, Specs2, Specs3;
 
     struct sched_param param;
 
@@ -105,9 +111,9 @@ int main() {
 
     start = get_time_ms(); // Start timing parallel execution 
 
-    pthread_create(&thread1, &attr, displayLetters, &time1);
-    pthread_create(&thread2, &attr, minThreePrintStatements, &time2);
-    pthread_create(&thread3, &attr, methFunction, &time3);
+    pthread_create(&thread1, &attr, displayLetters, &Specs1);
+    pthread_create(&thread2, &attr, minThreePrintStatements, &Specs2);
+    pthread_create(&thread3, &attr, methFunction, &Specs3);
 
     printf("before thread join 1\n");
     pthread_join(thread1, NULL);
@@ -119,39 +125,50 @@ int main() {
 
     end = get_time_ms(); // End timing parallel execution 
 
-    exec_time1 = time1.end_time - time1.start_time;
-    exec_time2 = time2.end_time - time2.start_time;
-    exec_time3 = time3.end_time - time3.start_time;
-    total_exec_time = exec_time1 + exec_time2 + exec_time3;
-    printf("Execution Time: %.2f ms\n\n", total_exec_time); //1
+    exec_time1 = Specs1.end_time - Specs1.start_time;
+    exec_time2 = Specs2.end_time - Specs2.start_time;
+    exec_time3 = Specs3.end_time - Specs3.start_time;
+    total_exec_time = exec_time1 + exec_time2 + exec_time3; // Sum of waiting time
 
-    printf("Release Time: %.2f ms\n\n", start); //2
-
-    start_exec = time1.start_time + time2.start_time + time3.start_time;
-    printf("Start Time: %.2f ms\n\n", start_exec); //3
-
-    end_exec = time1.start_time + time2.start_time + time3.start_time;
-    printf("End Time: %.2f ms\n\n", end_exec); //4
-
-    //for the wait time function
-    printf("Waiting Time: %.2f ms\n\n", waiting_time); //5
+    memory_usage1 = Specs1.memory_usage;
+    memory_usage2 = Specs2.memory_usage;
+    memory_usage3 = Specs3.memory_usage;
+    total_memory_consumption = memory_usage1 + memory_usage2 + memory_usage3;
+    
+    start_exec = Specs1.start_time + Specs2.start_time + Specs3.start_time;
+    end_exec = Specs1.start_time + Specs2.start_time + Specs3.start_time;
 
     response_time = start_exec - start;
-    printf("Response Time: %.2f ms\n\n", response_time); //6
-
     turnaround_time = end_exec - start;
-    printf("Turnaround Time: %.2f ms\n\n", turnaround_time); //7
+    cpu_useful_work = total_exec_time / (total_exec_time);
 
-    cpu_useful_work = total_exec_time / (total_exec_time /*+ sum of waiting time*/ );
-    printf("CPU Useful Work: %.2f ms\n\n", cpu_useful_work); //8
+    printf("Execution Time: %.2f ms\n\n", total_exec_time); // 1
+    printf("Release Time: %.2f ms\n\n", start); // 2
 
-    //for the CPU utilization
-    printf("CPU Utilization: %.2f ms\n\n", cpu_utilization); //9
+    printf("Start Time: %.2f ms\n\n", start_exec); // 3
+    printf("End Time: %.2f ms\n\n", end_exec); // 4
 
-    //for the memory consumption
-    printf("Memory Consumption: %.2f ms\n\n", memory_consumption); //10
+    // For the Wait Time Function (hehe W.T.F) <- Mindo
+    printf("Waiting Time: %.2f ms\n\n", waiting_time); // 5
 
-    elapsed_time = end - start;
+    // For the Response Time
+    printf("Response Time: %.2f ms\n\n", response_time); // 6
+
+    // For the Turnaround Time
+    printf("Turnaround Time: %.2f ms\n\n", turnaround_time); // 7
+
+    // For the CPU useful work
+    printf("CPU Useful Work: %.2f ms\n\n", cpu_useful_work); // 8
+
+    // For the CPU utilization
+    printf("CPU Utilization: %.2f ms\n\n", cpu_utilization); // 9
+
+    // For the Memory Consumption
+    printf("Memory Consumption 1: %.2f ms\n\n", memory_usage1); // 10
+    printf("Memory Consumption 2: %.2f ms\n\n", memory_usage2); // 11
+    printf("Memory Consumption 3: %.2f ms\n\n", memory_usage3); // 12
+    printf("Memory Consumption: %.2f ms\n\n", total_memory_consumption); // 13
+
     printf("Total Elapsed Time: %.2f ms\n\n", elapsed_time);
 
     printf("Main: Thread has finished executing\n");
