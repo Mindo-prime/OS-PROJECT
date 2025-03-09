@@ -61,7 +61,7 @@ void* displayLetters(void* args){
     dummy_loop();
 
     Specs -> end_time = get_time_ms();
-    Specs -> memory_usage = malloc_usable_size(Specs);
+    Specs -> memory_usage = sizeof(thread_Specs_s);
     
     
     // Calculate elapsed CPU time
@@ -110,7 +110,7 @@ void* methFunction( void* args){
     printf("The sum of all numbers between %d %d is %d\nwhile the average is %lf while the product is %lu\n",lb,ub,sum,avg,product);
     
     Specs -> end_time = get_time_ms();
-    Specs -> memory_usage = malloc_usable_size(Specs);
+    Specs -> memory_usage = sizeof(thread_Specs_s);
     pthread_exit(NULL);
 }
 
