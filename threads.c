@@ -4,6 +4,68 @@
 #include <sched.h>
 #include <pthread.h>
 #include <ctype.h>
+#include <time.h>
+#include <unistd.h>
+
+void* thread1(void* arg);
+void* thread2(void* args);
+void* thread3(void* args);
+double get_time_ms();
+void testLoop();
+
+int main() {
+    // Define CPU affinity set
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset); // Initialize the CPU set
+    CPU_SET(0, &cpuset); // Assign execution to CPU 0
+
+    pthread_t t1, t2, t3;
+    pthread_attr_t attr1,attr2; // Thread attributes
+    struct sched_param param;
+    int ret;
+
+    pthread_attr_init(&attr1); // Initialize thread attributes
+    ret = pthread_attr_setschedpolicy(&attr1, SCHED_FIFO);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling policy (SCHED_FIFO)");
+    }
+    param.sched_priority = 1; // Example priority; adjust as needed
+
+    ret = pthread_attr_setschedparam(&attr1, &param);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling parameter");
+    }
+    pthread_attr_setinheritsched(&attr1, PTHREAD_EXPLICIT_SCHED);
+
+    pthread_attr_init(&attr2); // Initialize thread attributes
+    ret = pthread_attr_setschedpolicy(&attr2, SCHED_RR);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling policy (SCHED_FIFO)");
+    }
+    param.sched_priority = 1; // Example priority; adjust as needed
+
+    ret = pthread_attr_setschedparam(&attr2, &param);
+    if (ret != 0) {
+        perror("Thread 1: Unable to set scheduling parameter");
+    }
+    pthread_attr_setinheritsched(&attr2, PTHREAD_EXPLICIT_SCHED);
+
+
+    pthread_attr_setaffinity_np(&attr1, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+    pthread_attr_setaffinity_np(&attr2, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
+
+    pthread_create(&t1, &attr1, thread1, NULL);
+    pthread_create(&t2, &attr1, thread2, NULL);
+    pthread_create(&t3, &attr1, thread3, NULL);
+
+    // pthread_create(&t1, &attr1, thread1, NULL);
+    // pthread_create(&t2, &attr1, thread2, NULL);
+    // pthread_create(&t3, &attr1, thread3, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+}
 
 void* thread1(void* arg) {
     char c1, c2;
@@ -45,23 +107,12 @@ void* thread3(void* args) {
     printf("The product of the two integers is %d", product);
 }
 
-int main() {
-    // Define CPU affinity set
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset); // Initialize the CPU set
-    CPU_SET(0, &cpuset); // Assign execution to CPU 0
+double get_time_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6; // Convert to milliseconds
+}
 
-    pthread_t t1, t2, t3;
-    pthread_attr_t attr; // Thread attributes
-
-    pthread_attr_init(&attr); // Initialize thread attributes
-    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
-
-    pthread_create(&t1, &attr, thread1, NULL);
-    pthread_create(&t2, &attr, thread2, NULL);
-    pthread_create(&t3, &attr, thread3, NULL);
-
-    pthread_join(t1, NULL);
-    pthread_join(t2, NULL);
-    pthread_join(t3, NULL);
+void testLoop() {
+    for (int i = 0; i < __INT_MAX__; i++) {}
 }
