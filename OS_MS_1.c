@@ -221,9 +221,6 @@ void* methFunction( void* args){
     // Record the actual start time
     metrics->start_time = get_time_ms();
     
-    // Record response time (same as waiting time for first execution)
-    metrics->response_time = metrics->waiting_time;
-    
     // Start measuring CPU time
     if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start) == -1) {
         perror("clock_gettime start");
