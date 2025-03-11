@@ -342,19 +342,22 @@ int main() {
     printf("Waiting Time 1: %f ms\n\n", thread1_metrics.waiting_time); // 5
     printf("Waiting Time 2: %f ms\n\n", thread2_metrics.waiting_time); // 5
     printf("Waiting Time 3: %f ms\n\n", thread3_metrics.waiting_time); // 5
-    printf("Waiting Time for all: %f ms\n\n", thread1_metrics.waiting_time + thread2_metrics.waiting_time + thread3_metrics.waiting_time); // 5
+    printf("Waiting Time sum: %f ms\n\n", thread1_metrics.waiting_time + thread2_metrics.waiting_time + thread3_metrics.waiting_time); // 5
+    printf("Waiting Time avg: %f ms\n\n", (thread1_metrics.waiting_time + thread2_metrics.waiting_time + thread3_metrics.waiting_time)/3); // 5
 
     // For the Response Time
     printf("Response Time 1: %f ms\n\n", thread1_metrics.response_time); // 6
     printf("Response Time 2: %f ms\n\n", thread2_metrics.response_time); // 6
     printf("Response Time 3: %f ms\n\n", thread3_metrics.response_time); // 6
-    printf("Response Time for all: %f ms\n\n", thread1_metrics.response_time + thread2_metrics.response_time + thread3_metrics.response_time); // 6
+    printf("Response Time sum: %f ms\n\n", thread1_metrics.response_time + thread2_metrics.response_time + thread3_metrics.response_time); // 6
+    printf("Response Time avg: %f ms\n\n", (thread1_metrics.response_time + thread2_metrics.response_time + thread3_metrics.response_time)/3); // 6
 
     // For the Turnaround Time
     printf("Turnaround Time 1: %f ms\n\n", thread1_metrics.turnaround_time); // 7
     printf("Turnaround Time 2: %f ms\n\n", thread2_metrics.turnaround_time); // 7
     printf("Turnaround Time 3: %f ms\n\n", thread3_metrics.turnaround_time); // 7
-    printf("Turnaround Time for all: %f ms\n\n", thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time); // 7
+    printf("Turnaround Time sum: %f ms\n\n", thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time); // 7
+    printf("Turnaround Time avg: %f ms\n\n", (thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time)/3); // 7
 
     // 8
 
@@ -362,13 +365,14 @@ int main() {
     printf("CPU Utilization 1: %f %%\n\n", thread1_metrics.cpu_utilization); // 9
     printf("CPU Utilization 2: %f %%\n\n", thread2_metrics.cpu_utilization); // 9
     printf("CPU Utilization 3: %f %%\n\n", thread3_metrics.cpu_utilization); // 9
-    printf("CPU Utilization for all: %f %%\n\n", (thread1_metrics.cpu_utilization + thread2_metrics.cpu_utilization + thread3_metrics.cpu_utilization)/3); // 9
+    printf("CPU Utilization sum: %f %%\n\n", thread1_metrics.cpu_utilization + thread2_metrics.cpu_utilization + thread3_metrics.cpu_utilization); // 9
+    printf("CPU Utilization avg: %f %%\n\n", (thread1_metrics.cpu_utilization + thread2_metrics.cpu_utilization + thread3_metrics.cpu_utilization)/3); // 9
 
     // For the Memory Consumption
     printf("Memory Consumption 1: %zu bytes\n\n", thread1_metrics.memory_usage); // 10
     printf("Memory Consumption 2: %zu bytes\n\n", thread2_metrics.memory_usage); // 11
     printf("Memory Consumption 3: %zu bytes\n\n", thread3_metrics.memory_usage); // 12
-    printf("Memory Consumption for all: %zu bytes\n\n", total_memory_consumption); // 13
+    printf("Memory Consumption sum: %zu bytes\n\n", total_memory_consumption); // 13
 
     printf("Main: Thread has finished executing\n");
     pthread_attr_destroy(&attr);
