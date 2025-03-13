@@ -189,7 +189,7 @@ int main() {
 
     // Explicitly defining the scheduling policy. This requires administrator (sudo) privileges.
     pthread_attr_setschedpolicy(&attr, POLICY);
-    pthread_attr_getinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
     param.sched_priority = sched_get_priority_max(POLICY);
     pthread_attr_setschedparam(&attr,&param);
 
