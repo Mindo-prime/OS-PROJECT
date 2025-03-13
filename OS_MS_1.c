@@ -156,13 +156,13 @@ void* mathFunction(void* args){
 
     int sum = (((upper_bound + 1) * upper_bound) / 2) - ((lower_bound * (lower_bound - 1)) / 2);
     double avg = sum / (upper_bound - lower_bound +1);
-    long product=1;
+    long long product=1;
     for (int i = lower_bound; i <= upper_bound; i++) {
         product *= i;
     }
 
     printf("The sum of all numbers between %d and %d is %d\n", n1, n2, sum);
-    printf("The product of all numbers between %d and %d is %d\n", n1, n2, product);
+    printf("The product of all numbers between %d and %d is %lld\n", n1, n2, product);
     printf("The average of the two numbers %d and %d is %f\n", n1, n2, avg);
     finalize_metrics(metrics);
     pthread_exit(NULL);
