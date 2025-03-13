@@ -31,7 +31,7 @@ typedef struct {
 } thread_metrics_t;
 
 // Function to get the current time in milliseconds
-double get_time_ms(){
+double get_time_ms() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
@@ -49,7 +49,7 @@ double get_cpu_time_ms() {
 
 void dummy_loop() {
     int sum = 0;
-    for(int i = 0; i<1e8; i++){
+    for (int i = 0; i < 2e9; i++) {
         sum += 1;
     }
 }
@@ -108,10 +108,13 @@ void printMetrics(int threadNo, thread_metrics_t* metrics) {
     printf("Memory consumption of thread %d: %zu bytes\n", threadNo, metrics->memory_usage);
 }
 
-void* displayLetters(void* args){
+void* displayLetters(void* args) {
     thread_metrics_t *metrics = (thread_metrics_t *)args;
     initialize_metrics(metrics);
     char char1,char2;
+    int dummy_array[1000]; // Dummy loop to test memory consumption metric
+    dummy_loop(); // Dummy loop to test time metrics
+
     printf("Enter two alphabetic characters separated by a space: \n");
 
     pthread_mutex_lock(&input_lock);
@@ -125,7 +128,6 @@ void* displayLetters(void* args){
     }
     printf("\n");
     
-    dummy_loop();
     finalize_metrics(metrics);
     pthread_exit(NULL);
 }
@@ -133,8 +135,8 @@ void* displayLetters(void* args){
 void* minThreePrintStatements( void* args){ 
     thread_metrics_t *metrics = (thread_metrics_t *)args;
     initialize_metrics(metrics);
-    int dummy_array[1000000];
-    dummy_loop();
+    int dummy_array[1000000]; // Dummy array to test memory consumption metric
+    dummy_loop(); // Dummy loop to test time metrics
     printf("minThreeprintStatements() is executing, this is the first print\n");
     printf("minThreeprintStatements() is executing, this is the second print\n");
     printf("minThreeprintStatements() is executing, this is the last print with thread ID: %lu\n", (unsigned long) pthread_self());
@@ -142,10 +144,11 @@ void* minThreePrintStatements( void* args){
     pthread_exit(NULL);
 }
 
-void* mathFunction(void* args){
+void* mathFunction(void* args) {
     thread_metrics_t *metrics = (thread_metrics_t *) args;
     initialize_metrics(metrics);
-    dummy_loop();
+    int dummy_array[10000]; // Dummy array to test memory consumption metric
+    dummy_loop(); // Dummy loop to test time metrics
     int n1, n2;
     printf("Enter two numbers separated by a space:\n");
 
