@@ -268,6 +268,7 @@ int main() {
 
     printf("Main: Thread has finished executing\n");
     pthread_attr_destroy(&attr);
+    pthread_mutex_destroy(&input_lock);
     pthread_exit(NULL);
     return 0;
 }
