@@ -98,12 +98,12 @@ void finalize_metrics(thread_metrics_t* metrics) {
 
 void printMetrics(int threadNo, thread_metrics_t* metrics) {
     printf("---------------THREAD %d---------------\n", threadNo);
-    printf("Release time of thread %d: %.5f\n", threadNo, metrics->release_time);
-    printf("Start time of thread %d: %.5f\n", threadNo, metrics->start_time);
-    printf("End time of thread %d: %.5f\n", threadNo, metrics->end_time);
-    printf("Turnaround time of thread %d: %.5fms\n", threadNo, metrics->turnaround_time);
-    printf("Execution time of thread %d: %.5fms\n", threadNo, metrics->cpu_time);
-    printf("Waiting time of thread %d: %.5fms\n", threadNo, metrics->waiting_time);
+    printf("Release time of thread %d: %.5f ms\n", threadNo, metrics->release_time);
+    printf("Start time of thread %d: %.5f ms\n", threadNo, metrics->start_time);
+    printf("End time of thread %d: %.5f ms\n", threadNo, metrics->end_time);
+    printf("Turnaround time of thread %d: %.5f ms\n", threadNo, metrics->turnaround_time);
+    printf("Execution time of thread %d: %.5f ms\n", threadNo, metrics->cpu_time);
+    printf("Waiting time of thread %d: %.5f ms\n", threadNo, metrics->waiting_time);
     printf("CPU utilization of thread %d: %.5f%%\n", threadNo, metrics->cpu_utilization);
     printf("Memory consumption of thread %d: %zu bytes\n", threadNo, metrics->memory_usage);
 }
@@ -121,8 +121,9 @@ void* displayLetters(void* args){
     char minchar = char1 < char2? char1 : char2;
     char maxchar = char1 > char2? char1 : char2;
     for (char c = minchar; c <=maxchar;c++){
-        printf("%c\n", c);
+        printf("%c ", c);
     }
+    printf("\n");
     
     //dummy_loop();
     finalize_metrics(metrics);
@@ -141,7 +142,7 @@ void* minThreePrintStatements( void* args){
 }
 
 void* mathFunction(void* args){
-    thread_metrics_t *metrics = (thread_metrics_t *)args;
+    thread_metrics_t *metrics = (thread_metrics_t *) args;
     initialize_metrics(metrics);
     //dummy_loop();
     int n1, n2;
