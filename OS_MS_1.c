@@ -98,11 +98,23 @@ void finalize_metrics(thread_metrics_t* metrics) {
     finalize_memory_usage(metrics);
 }
 
+void printMetrics(int threadNo, thread_metrics_t* metrics) {
+    printf("---------------THREAD %d---------------\n", threadNo);
+    printf("Release time of thread %d: %.5f\n", threadNo, metrics->release_time);
+    printf("Start time of thread %d: %.5f\n", threadNo, metrics->start_time);
+    printf("End time of thread %d: %.5f\n", threadNo, metrics->end_time);
+    printf("Turnaround time of thread %d: %.5fms\n", threadNo, metrics->turnaround_time);
+    printf("Execution time of thread %d: %.5fms\n", threadNo, metrics->cpu_time);
+    printf("Waiting time of thread %d: %.5fms\n", threadNo, metrics->waiting_time);
+    printf("CPU utilization of thread %d: %.5f%%\n", threadNo, metrics->cpu_utilization);
+    printf("Memory consumption of thread %d: %zu bytes\n", threadNo, metrics->memory_usage);
+}
+
 void* displayLetters(void* args){
     thread_metrics_t *metrics = (thread_metrics_t *)args;
     initialize_metrics(metrics);
     char char1,char2;
-    printf("Enter two alphabetic characters\n");
+    printf("Enter two alphabetic characters separated by a space: \n");
 
     pthread_mutex_lock(&input_lock);
     scanf("%c %c" ,&char1,&char2);
@@ -130,26 +142,30 @@ void* minThreePrintStatements( void* args){
     pthread_exit(NULL);
 }
 
-void* mathFunction( void* args){
+void* mathFunction(void* args){
     thread_metrics_t *metrics = (thread_metrics_t *)args;
     initialize_metrics(metrics);
     //dummy_loop();
-    int n1,n2;
-    printf("enter two numbers please\n");
+    int n1, n2;
+    printf("Enter two numbers separated by a space:\n");
 
     pthread_mutex_lock(&input_lock);
     scanf("%d %d", &n1, &n2);
     pthread_mutex_lock(&input_lock);
-    
-    int lb = n1<n2? n1 : n2,
-    ub = n1>n2? n1 : n2;
-    int sum = (((ub+1)* ub )/2) - (( lb * (lb-1))/2);
-    double avg = sum / (ub-lb+1);
+
+    int lower_bound = n1 < n2 ? n1 : n2;
+    int upper_bound = n1 > n2 ? n1 : n2;
+
+    int sum = (((upper_bound + 1) * upper_bound) / 2) - ((lower_bound * (lower_bound - 1)) / 2);
+    double avg = sum / (upper_bound - lower_bound +1);
     long product=1;
-    for (int i=lb;i<=ub;i++){
-        product*=i;
+    for (int i = lower_bound; i <= upper_bound; i++) {
+        product *= i;
     }
-    printf("The sum of all numbers between %d %d is %d\nwhile the average is %lf while the product is %lu\n",lb,ub,sum,avg,product);
+
+    printf("The sum of all numbers between %d and %d is %d\n", n1, n2, sum);
+    printf("The product of all numbers between %d and %d is %d\n", n1, n2, product);
+    printf("The average of the two numbers %d and %d is %f\n", n1, n2, avg);
     finalize_metrics(metrics);
     pthread_exit(NULL);
 }
@@ -236,8 +252,6 @@ int main() {
     printf("Turnaround Time 3: %f ms\n\n", thread3_metrics.turnaround_time); // 7
     printf("Turnaround Time sum: %f ms\n\n", thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time); // 7
     printf("Turnaround Time avg: %f ms\n\n", (thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time)/3); // 7
-
-    // 8
 
     // For the CPU utilization
     printf("CPU Utilization 1: %f %%\n\n", thread1_metrics.cpu_utilization); // 9
