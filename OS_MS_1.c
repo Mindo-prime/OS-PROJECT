@@ -1,6 +1,4 @@
 #define _GNU_SOURCE
-#define POLICY SCHED_FIFO
-// #define POLICY SCHED_RR
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -193,6 +191,7 @@ int main() {
     pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
 
     // Explicitly defining the scheduling policy. This requires administrator (sudo) privileges.
+    const int POLICY = SCHED_FIFO;
     pthread_attr_setschedpolicy(&attr, POLICY);
     pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
     param.sched_priority = sched_get_priority_max(POLICY);
