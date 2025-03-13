@@ -74,8 +74,9 @@ void finalize_memory_usage(thread_metrics_t* metrics) {
         return;
     }
 
-    int local_var;  // Use a local variable to approximate the stack pointer
-    uintptr_t stack_ptr = (uintptr_t)&local_var;
+    // Create a new variable on the current thread to approximate the position of the thread's stack pointer
+    int thread_var; 
+    uintptr_t stack_ptr = (uintptr_t)&thread_var;
     metrics->memory_usage = (uintptr_t)stack_addr + stack_size - stack_ptr;
     metrics->stack_size = stack_size;
 
@@ -95,36 +96,7 @@ void finalize_metrics(thread_metrics_t* metrics) {
 
 void* displayLetters(void* args){
     thread_metrics_t *metrics = (thread_metrics_t *)args;
-    struct timespec cpu_start, cpu_end;
-    pthread_attr_t attr;
-    void *stack_addr;
-    size_t stack_size;
-
-    // Get this thread's attributes
-    if (pthread_getattr_np(pthread_self(), &attr) != 0) {
-        perror("pthread_getattr_np");
-        return NULL;
-    }
-
-    // Retrieve stack address and size
-    if (pthread_attr_getstack(&attr, &stack_addr, &stack_size) != 0) {
-        perror("pthread_attr_getstack");
-        pthread_attr_destroy(&attr);
-        return NULL;
-    }
-
-    // Record the actual start time
-    metrics->start_time = get_time_ms();
-    
-    // Record response time (same as waiting time for first execution)
-    metrics->response_time = metrics->waiting_time;
-    
-    // Start measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start) == -1) {
-        perror("clock_gettime start");
-        return NULL;
-    }
-
+    initialize_metrics(metrics);
     char char1,char2;
     printf("Enter two alphabetic characters\n");
     scanf(" %c %c" ,&char1,&char2);
@@ -135,146 +107,24 @@ void* displayLetters(void* args){
     }
     
     //dummy_loop();
-
-    // Stop measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end) == -1) {
-        perror("clock_gettime end");
-        return NULL;
-    }
-    
-    // Record CPU time used
-    metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
-
-    // Record Response time
-    metrics->response_time = metrics->start_time - metrics->release_time;
-
-    // Record finish time
-    metrics->end_time = get_time_ms();
-    
-    // Calculate turnaround time
-    metrics->turnaround_time = metrics->end_time - metrics->release_time;
-
-    // Calculate waiting time (time from release until start)
-    metrics->waiting_time = metrics->turnaround_time - metrics->cpu_time;
-    
-    // Calculate CPU utilization (CPU time / turnaround time)
-    metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
-
-    // Calculate current stack usage
-    int local_var;  // Use a local variable to approximate the stack pointer
-    uintptr_t stack_ptr = (uintptr_t)&local_var;
-    metrics->memory_usage = (uintptr_t)stack_addr + stack_size - stack_ptr;
-    metrics->stack_size = stack_size;
- 
-    // Cleanup
-    pthread_attr_destroy(&attr);
-    
+    finalize_metrics(metrics);
     pthread_exit(NULL);
 }
 
 void* minThreePrintStatements( void* args){ 
     thread_metrics_t *metrics = (thread_metrics_t *)args;
-    struct timespec cpu_start, cpu_end;
-    pthread_attr_t attr;
-    void *stack_addr;
-    size_t stack_size;
-
-    // Get this thread's attributes
-    if (pthread_getattr_np(pthread_self(), &attr) != 0) {
-        perror("pthread_getattr_np");
-        return NULL;
-    }
-
-    // Retrieve stack address and size
-    if (pthread_attr_getstack(&attr, &stack_addr, &stack_size) != 0) {
-        perror("pthread_attr_getstack");
-        pthread_attr_destroy(&attr);
-        return NULL;
-    }
-
-    // Record the actual start time
-    metrics->start_time = get_time_ms();
-    
-    // Record response time (same as waiting time for first execution)
-    metrics->response_time = metrics->waiting_time;
-    
-    // Start measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start) == -1) {
-        perror("clock_gettime start");
-        return NULL;
-    }
-
+    initialize_metrics(metrics);
     //dummy_loop();
     printf("minThreeprintStatements() is executing, this is the first print\n");
     printf("minThreeprintStatements() is executing, this is the second print\n");
     printf("minThreeprintStatements() is executing, this is the last print with thread ID: %lu\n", (unsigned long) pthread_self());
-    
-
-    // Stop measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end) == -1) {
-        perror("clock_gettime end");
-        return NULL;
-    }
-    
-    // Record CPU time used
-    metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
-
-    // Record Response time
-    metrics->response_time = metrics->start_time - metrics->release_time;
-
-    // Record finish time
-    metrics->end_time = get_time_ms();
-    
-    // Calculate turnaround time
-    metrics->turnaround_time = metrics->end_time - metrics->release_time;
-
-    // Calculate waiting time (time from release until start)
-    metrics->waiting_time = metrics->turnaround_time - metrics->cpu_time;
-    
-    // Calculate CPU utilization (CPU time / turnaround time)
-    metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
-    
-    // Calculate current stack usage
-    int local_var;  // Use a local variable to approximate the stack pointer
-    uintptr_t stack_ptr = (uintptr_t)&local_var;
-    metrics->memory_usage = (uintptr_t)stack_addr + stack_size - stack_ptr;
-    metrics->stack_size = stack_size;
- 
-    // Cleanup
-    pthread_attr_destroy(&attr);
-
+    finalize_metrics(metrics);
     pthread_exit(NULL);
 }
 
-void* methFunction( void* args){
+void* mathFunction( void* args){
     thread_metrics_t *metrics = (thread_metrics_t *)args;
-    struct timespec cpu_start, cpu_end;
-    pthread_attr_t attr;
-    void *stack_addr;
-    size_t stack_size;
-
-    // Get this thread's attributes
-    if (pthread_getattr_np(pthread_self(), &attr) != 0) {
-        perror("pthread_getattr_np");
-        return NULL;
-    }
-
-    // Retrieve stack address and size
-    if (pthread_attr_getstack(&attr, &stack_addr, &stack_size) != 0) {
-        perror("pthread_attr_getstack");
-        pthread_attr_destroy(&attr);
-        return NULL;
-    }
-
-    // Record the actual start time
-    metrics->start_time = get_time_ms();
-    
-    // Start measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start) == -1) {
-        perror("clock_gettime start");
-        return NULL;
-    }
-
+    initialize_metrics(metrics);
     //dummy_loop();
     int n1,n2;
     printf("enter two numbers please\n");
@@ -288,40 +138,7 @@ void* methFunction( void* args){
         product*=i;
     }
     printf("The sum of all numbers between %d %d is %d\nwhile the average is %lf while the product is %lu\n",lb,ub,sum,avg,product);
-    
-    // Stop measuring CPU time
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end) == -1) {
-        perror("clock_gettime end");
-        return NULL;
-    }
-    
-    // Record CPU time used
-    metrics->cpu_time = timespec_to_ms(&cpu_end) - timespec_to_ms(&cpu_start);
-
-    // Record Response time
-    metrics->response_time = metrics->start_time - metrics->release_time;
-
-    // Record finish time
-    metrics->end_time = get_time_ms();
-    
-    // Calculate turnaround time
-    metrics->turnaround_time = metrics->end_time - metrics->release_time;
-
-    // Calculate waiting time (time from release until start)
-    metrics->waiting_time = metrics->turnaround_time - metrics->cpu_time;
-    
-    // Calculate CPU utilization (CPU time / turnaround time)
-    metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
-    
-    // Calculate current stack usage
-    int local_var;  // Use a local variable to approximate the stack pointer
-    uintptr_t stack_ptr = (uintptr_t)&local_var;
-    metrics->memory_usage = (uintptr_t)stack_addr + stack_size - stack_ptr;
-    metrics->stack_size = stack_size;
- 
-    // Cleanup
-    pthread_attr_destroy(&attr);
-
+    finalize_metrics(metrics);
     pthread_exit(NULL);
 }
 
@@ -345,7 +162,9 @@ int main() {
     pthread_attr_init(&attr); // Initialize thread attributes
     pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
 
+    // Explicitly defining the scheduling policy. This requires administrator (sudo) privileges.
     pthread_attr_setschedpolicy(&attr, POLICY);
+    pthread_attr_getinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
     param.sched_priority = sched_get_priority_max(POLICY);
     pthread_attr_setschedparam(&attr,&param);
 
@@ -357,7 +176,7 @@ int main() {
 
     pthread_create(&thread1, &attr, displayLetters, &thread1_metrics);
     pthread_create(&thread2, &attr, minThreePrintStatements, &thread2_metrics);
-    pthread_create(&thread3, &attr, methFunction, &thread3_metrics);
+    pthread_create(&thread3, &attr, mathFunction, &thread3_metrics);
 
     printf("before thread join 1\n");
     pthread_join(thread1, NULL);
