@@ -11,7 +11,10 @@
 #include <malloc.h>
 #include <stdint.h> 
 
-// Define a Structure to hof the Start and End times along with the Memory Usage of a Thread
+// Mutex to prevent issues from occurring with shared resources between threads
+pthread_mutex_t input_lock;
+
+// Struct for measuring the performance metrics of a thread
 typedef struct {
     double release_time;   
     double start_time;      // When thread starts executiing
@@ -36,6 +39,7 @@ double get_time_ms(){
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
 }
 
+// Function to get the current cpu time in milliseconds - this excludes time that is not spend executing instructions
 double get_cpu_time_ms() {
     struct timespec ts;
     if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == -1) {
@@ -45,7 +49,7 @@ double get_cpu_time_ms() {
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
 }
 
-void dummy_loop(){
+void dummy_loop() {
     int sum = 0;
     for(int i = 0; i<1e8; i++){
         sum += 1;
@@ -99,7 +103,11 @@ void* displayLetters(void* args){
     initialize_metrics(metrics);
     char char1,char2;
     printf("Enter two alphabetic characters\n");
-    scanf(" %c %c" ,&char1,&char2);
+
+    pthread_mutex_lock(&input_lock);
+    scanf("%c %c" ,&char1,&char2);
+    pthread_mutex_unlock(&input_lock);
+
     char minchar = char1 < char2? char1 : char2;
     char maxchar = char1 > char2? char1 : char2;
     for (char c = minchar; c <=maxchar;c++){
@@ -128,7 +136,11 @@ void* mathFunction( void* args){
     //dummy_loop();
     int n1,n2;
     printf("enter two numbers please\n");
+
+    pthread_mutex_lock(&input_lock);
     scanf("%d %d", &n1, &n2);
+    pthread_mutex_lock(&input_lock);
+    
     int lb = n1<n2? n1 : n2,
     ub = n1>n2? n1 : n2;
     int sum = (((ub+1)* ub )/2) - (( lb * (lb-1))/2);
@@ -144,7 +156,6 @@ void* mathFunction( void* args){
 
 
 int main() {
-
     // Bound the CPU to 1 Core
     cpu_set_t cpuset; // Define CPU affinity set
     CPU_ZERO(&cpuset); // Initialize the CPU set
