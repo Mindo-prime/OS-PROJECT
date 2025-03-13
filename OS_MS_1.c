@@ -14,14 +14,16 @@
 // Define a Structure to hof the Start and End times along with the Memory Usage of a Thread
 typedef struct {
     double release_time;   
-    double start_time;      
+    double start_time;      // When thread starts executiing
     double end_time;        // When thread finishes executing
+    double cpu_start;       // When thread starts executing (CPU time)
+    double cpu_end;         // When thread finishes executing (CPU time, waiting time is not counted)
     double waiting_time;    // Time spent waiting to be scheduled
     double response_time;   // Time from release to first execution
     double turnaround_time; // Time from release to completion
     double cpu_time;        // Actual CPU time used (from CLOCK_THREAD_CPUTIME_ID)
     double cpu_utilization; // CPU time / turnaround time
-    size_t memory_usage;
+    size_t memory_usage; // Memory consumption 
     size_t stack_size;
 } thread_metrics_t;
 
@@ -34,8 +36,13 @@ double get_time_ms(){
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
 }
 
-double timespec_to_ms(struct timespec *ts) {
-    return (double)ts->tv_sec * 1000.0 + (double)ts->tv_nsec / 1000000.0;
+double get_cpu_time_ms() {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == -1) {
+        perror("get_cpu_time_ms");
+        return -1;
+    }
+    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
 }
 
 void dummy_loop(){
@@ -43,6 +50,47 @@ void dummy_loop(){
     for(int i = 0; i<1e8; i++){
         sum += 1;
     }
+}
+
+void initialize_metrics(thread_metrics_t* metrics) {
+    metrics->start_time = get_time_ms();
+    metrics->cpu_start = get_cpu_time_ms();
+}
+
+void finalize_memory_usage(thread_metrics_t* metrics) {
+    pthread_attr_t attr;
+    void *stack_addr;
+    size_t stack_size;
+    // Get this thread's attributes
+    if (pthread_getattr_np(pthread_self(), &attr) != 0) {
+        perror("pthread_getattr_np");
+        return;
+    }
+
+    // Retrieve stack address and size
+    if (pthread_attr_getstack(&attr, &stack_addr, &stack_size) != 0) {
+        perror("pthread_attr_getstack");
+        pthread_attr_destroy(&attr);
+        return;
+    }
+
+    int local_var;  // Use a local variable to approximate the stack pointer
+    uintptr_t stack_ptr = (uintptr_t)&local_var;
+    metrics->memory_usage = (uintptr_t)stack_addr + stack_size - stack_ptr;
+    metrics->stack_size = stack_size;
+
+    pthread_attr_destroy(&attr);
+}
+
+void finalize_metrics(thread_metrics_t* metrics) {
+    metrics->end_time = get_time_ms();
+    metrics->cpu_end = get_cpu_time_ms();
+    metrics->turnaround_time = metrics->end_time - metrics->release_time;
+    metrics->cpu_time = metrics->cpu_end - metrics->cpu_start;
+    metrics->waiting_time = metrics->turnaround_time - metrics->cpu_time;
+    metrics->response_time = metrics->start_time - metrics-> release_time;
+    metrics->cpu_utilization = (metrics->cpu_time / metrics->turnaround_time) * 100.0;
+    finalize_memory_usage(metrics);
 }
 
 void* displayLetters(void* args){
