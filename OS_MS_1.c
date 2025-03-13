@@ -149,7 +149,7 @@ void* mathFunction(void* args){
 
     pthread_mutex_lock(&input_lock);
     scanf("%d %d", &n1, &n2);
-    pthread_mutex_lock(&input_lock);
+    pthread_mutex_unlock(&input_lock);
 
     int lower_bound = n1 < n2 ? n1 : n2;
     int upper_bound = n1 > n2 ? n1 : n2;
