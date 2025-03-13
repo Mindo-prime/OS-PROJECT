@@ -125,7 +125,7 @@ void* displayLetters(void* args){
     }
     printf("\n");
     
-    //dummy_loop();
+    dummy_loop();
     finalize_metrics(metrics);
     pthread_exit(NULL);
 }
@@ -133,7 +133,8 @@ void* displayLetters(void* args){
 void* minThreePrintStatements( void* args){ 
     thread_metrics_t *metrics = (thread_metrics_t *)args;
     initialize_metrics(metrics);
-    //dummy_loop();
+    int dummy_array[1000000];
+    dummy_loop();
     printf("minThreeprintStatements() is executing, this is the first print\n");
     printf("minThreeprintStatements() is executing, this is the second print\n");
     printf("minThreeprintStatements() is executing, this is the last print with thread ID: %lu\n", (unsigned long) pthread_self());
@@ -144,7 +145,7 @@ void* minThreePrintStatements( void* args){
 void* mathFunction(void* args){
     thread_metrics_t *metrics = (thread_metrics_t *) args;
     initialize_metrics(metrics);
-    //dummy_loop();
+    dummy_loop();
     int n1, n2;
     printf("Enter two numbers separated by a space:\n");
 
