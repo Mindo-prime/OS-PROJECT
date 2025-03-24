@@ -99,6 +99,7 @@ void printMetrics(int threadNo, thread_metrics_t* metrics) {
     printf("Release time of thread %d: %.5f ms\n", threadNo, metrics->release_time);
     printf("Start time of thread %d: %.5f ms\n", threadNo, metrics->start_time);
     printf("End time of thread %d: %.5f ms\n", threadNo, metrics->end_time);
+    printf("Response time of thread %d: %.f ms\n", threadNo, metrics->response_time);
     printf("Turnaround time of thread %d: %.5f ms\n", threadNo, metrics->turnaround_time);
     printf("Execution time of thread %d: %.5f ms\n", threadNo, metrics->cpu_time);
     printf("Waiting time of thread %d: %.5f ms\n", threadNo, metrics->waiting_time);
@@ -166,7 +167,7 @@ void* mathFunction(void* args) {
 
     printf("The sum of all numbers between %d and %d is %d\n", n1, n2, sum);
     printf("The product of all numbers between %d and %d is %lld\n", n1, n2, product);
-    printf("The average of the two numbers %d and %d is %f\n", n1, n2, avg);
+    printf("The average of all numbers between %d and %d is %f\n", n1, n2, avg);
     finalize_metrics(metrics);
     pthread_exit(NULL);
 }
@@ -191,7 +192,7 @@ int main() {
     pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset); // Set thread CPU affinity
 
     // Explicitly defining the scheduling policy. This requires administrator (sudo) privileges.
-    const int POLICY = SCHED_FIFO;
+    const int POLICY = SCHED_RR;
     pthread_attr_setschedpolicy(&attr, POLICY);
     pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
     param.sched_priority = sched_get_priority_max(POLICY);
@@ -225,22 +226,26 @@ int main() {
     printMetrics(3, &thread3_metrics);
 
     printf("\n---------------TOTAL---------------\n");
+    double total_response_time = thread1_metrics.response_time + thread2_metrics.response_time + thread3_metrics.response_time;
     double total_turnaround_time = thread1_metrics.turnaround_time + thread2_metrics.turnaround_time + thread3_metrics.turnaround_time;
     double total_execution_time = thread1_metrics.cpu_time + thread2_metrics.cpu_time + thread3_metrics.cpu_time;
     double total_waiting_time = thread1_metrics.waiting_time + thread2_metrics.waiting_time + thread3_metrics.waiting_time;
     size_t total_memory_usage = thread1_metrics.memory_usage + thread2_metrics.memory_usage + thread3_metrics.memory_usage;
+    printf("Total response time: %.5f ms\n", total_response_time);
     printf("Total turnaround time: %.5f ms\n", total_turnaround_time);
     printf("Total execution time: %.5f ms\n", total_execution_time); 
     printf("Total waiting time: %.5f ms\n", total_waiting_time); 
     printf("Total memory consumption: %zu bytes\n", total_memory_usage); 
 
     printf("\n---------------AVERAGE---------------\n");
+    double average_response_time = total_response_time / 3;
     double average_turnaround_time = total_turnaround_time / 3;
     double average_execution_time = total_execution_time / 3;
     double average_waiting_time = total_waiting_time / 3;
     size_t average_memory_usage = total_memory_usage / 3;
     double average_cpu_utilization = (thread1_metrics.cpu_utilization + thread2_metrics.cpu_utilization + thread3_metrics.cpu_utilization) / 3;
-    printf("Average turnaround time: %.5f ms\n", average_turnaround_time / 3);
+    printf("Average response time: %.5f ms\n", average_response_time);
+    printf("Average turnaround time: %.5f ms\n", average_turnaround_time);
     printf("Average execution time: %.5f ms\n", average_execution_time); 
     printf("Average waiting time: %.5f ms\n", average_waiting_time); 
     printf("Average CPU utilization: %.5f%%\n", average_cpu_utilization);
