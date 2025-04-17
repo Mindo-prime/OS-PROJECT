@@ -6,6 +6,8 @@
 #include <stdlib.h>
 
 
+
+
 void trim(char* str) {
     
     char *start = str;
@@ -33,17 +35,18 @@ void assign(char* args){
 
 }
 
-void readFile(char* args){
+char* readFile(char* args){
 
     FILE *fptr = fopen(args,"r");
 
     char content[100];
+    char result[10000];
 
     if (fptr != NULL){
         printf("Reading from file '%s':\n", args);
         printf("-------------------------\n");
         while(fgets(content,100,fptr)){
-            printf("%s", content);
+            strcat(result,content);
         }
     }else
         printf("an error occured reading the file.");
@@ -51,6 +54,7 @@ void readFile(char* args){
     printf("-------------------------\n");
     fclose(fptr);
 
+    return result;
 }
 
 void writeFile(char* args){
@@ -60,7 +64,7 @@ void writeFile(char* args){
     char data[100];
 
     if(space == NULL)
-        printf("Error: Invalid printFromTo format\n");
+        printf("Error: Invalid writeFile format\n");
     
     else{
         int name_ln = space - args;
@@ -199,8 +203,9 @@ void File_Execution(char* program) {
 }
 
 
-int main(void) {
 
+int main(void) {
+    
     File_Execution("Program_1.txt");
     File_Execution("Program_2.txt");
     File_Execution("Program_3.txt");
