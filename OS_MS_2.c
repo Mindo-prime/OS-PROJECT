@@ -36,22 +36,6 @@ static NamedMutex named_mutexes[] = {
 };
 #define NUM_MUTEXES (sizeof(named_mutexes) / sizeof(named_mutexes[0]))
 
-
-void File_Execution(char* program);
-void execute_line(char *line);
-void process_print(char * args);
-void process_assign(char * args);
-void process_write_file(char * args);
-void process_read_file(char * args);
-void process_print_from_to(char * args);
-void sem_wait_resource(char * args);
-void sem_signal_resource(char * args);
-char* get_variable_value(char *name);
-void set_variable(char *name, char *value);
-int find_variable(char *name);
-int find_mutex(char *name);
-
-
 void trim(char *str) {
     if (str == NULL || *str == '\0') return; // Null or empty string
     char *start = str;
