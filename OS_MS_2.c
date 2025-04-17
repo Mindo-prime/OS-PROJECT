@@ -74,7 +74,7 @@ void trim(char *str) {
 
 void File_Execution(char* program) {
     FILE *fptr = fopen(program,"r");
-    char content[1000];
+    char content[100];
 
     if(fptr != NULL) {
         while (fgets(content, 1000, fptr)) {
@@ -85,9 +85,7 @@ void File_Execution(char* program) {
     else {
         printf("Error in opening file\n");
     }
-
-    printf("\n");
-    printf("-------------------------\n");
+    
     fclose(fptr);
 }
 void execute_line(char *line) {
@@ -307,7 +305,15 @@ void* exec_1(void* args){
 }
 
 void* exec_2(void* args){
+    pthread_exit(NULL);
+}
+
+void* exec_2(void* args){
     File_Execution("Program_2.txt");
+    pthread_exit(NULL);
+}
+
+void* exec_3(void* args){
     pthread_exit(NULL);
 }
 
