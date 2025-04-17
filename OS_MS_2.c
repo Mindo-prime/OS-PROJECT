@@ -36,6 +36,7 @@ static NamedMutex named_mutexes[] = {
 };
 #define NUM_MUTEXES (sizeof(named_mutexes) / sizeof(named_mutexes[0]))
 
+
 void trim(char *str) {
     if (str == NULL || *str == '\0') return; // Null or empty string
     char *start = str;
@@ -56,53 +57,7 @@ void trim(char *str) {
     }
 }
 
-void File_Execution(char* program) {
-    FILE *fptr = fopen(program,"r");
-    char content[100];
 
-    if(fptr != NULL) {
-        while (fgets(content, 1000, fptr)) {
-            printf("line %s",content);
-            execute_line(content);
-        }
-    }
-    else {
-        printf("Error in opening file\n");
-    }
-    
-    fclose(fptr);
-}
-void execute_line(char *line) {
-    //skip empty lines and comments to end the exection might not be needed
-    if (line[0] == '\0') {
-        return;
-    }
-    
-    //extract command and arguments dosent need max length
-    char *command = strtok(line, " ");
-    char *args    = strtok(NULL, "");
-
-    static char empty_string[] = ""; 
-    if (!args) args = empty_string;
-    
-    if (strcmp(command, "print") == 0) {
-        process_print(args);
-    } else if (strcmp(command, "assign") == 0) {
-        process_assign(args);
-    } else if (strcmp(command, "writeFile") == 0) {
-        process_write_file(args);
-    } else if (strcmp(command, "readFile") == 0) {
-        process_read_file(args);
-    } else if (strcmp(command, "printFromTo") == 0) {
-        process_print_from_to(args);
-    } else if (strcmp(command, "semWait") == 0) {
-        sem_wait_resource(args);
-    } else if (strcmp(command, "semSignal") == 0) {
-        sem_signal_resource(args);
-    } else {
-        fprintf(stderr, "Error: Unknown command '%s'\n", command);//guys this outputs a formated error message
-    }
-}
 void process_print(char * args){
     trim(args);
     char *value = get_variable_value(args);
@@ -131,13 +86,13 @@ void process_assign(char * args){
             set_variable(name, user_input);
         }
     }else if (strncmp(op, "readFile", 8) == 0) {        
-        readFile(value);
+        process_read_file(value);
         set_variable(name,value);
     }else{
         set_variable(name,op);
     }
 }
-char *readFile(char* args){
+char* process_read_file(char* args){
     FILE *fptr = fopen(args,"r");
 
     char content[100];
@@ -152,7 +107,7 @@ char *readFile(char* args){
     return res;
 }
 
-void writeFile(char* args){
+void process_write_file(char* args){
 
     char *space = strchr(args,' ');
     char name[100];
@@ -186,7 +141,7 @@ void writeFile(char* args){
 }
 
 
-void printFromTo (char* args){
+void process_print_from_to (char* args){
 
     int a, b;
 
@@ -265,6 +220,57 @@ int find_variable(char *name){
     }
     return -1;
 }
+
+
+
+void File_Execution(char* program) {
+    FILE *fptr = fopen(program,"r");
+    char content[100];
+
+    if(fptr != NULL) {
+        while (fgets(content, 1000, fptr)) {
+            printf("line %s",content);
+            execute_line(content);
+        }
+    }
+    else {
+        printf("Error in opening file\n");
+    }
+    
+    fclose(fptr);
+}
+void execute_line(char *line) {
+    //skip empty lines and comments to end the exection might not be needed
+    if (line[0] == '\0') {
+        return;
+    }
+    
+    //extract command and arguments dosent need max length
+    char *command = strtok(line, " ");
+    char *args    = strtok(NULL, "");
+
+    static char empty_string[] = ""; 
+    if (!args) args = empty_string;
+    
+    if (strcmp(command, "print") == 0) {
+        process_print(args);
+    } else if (strcmp(command, "assign") == 0) {
+        process_assign(args);
+    } else if (strcmp(command, "writeFile") == 0) {
+        process_write_file(args);
+    } else if (strcmp(command, "readFile") == 0) {
+        process_read_file(args);
+    } else if (strcmp(command, "printFromTo") == 0) {
+        process_print_from_to(args);
+    } else if (strcmp(command, "semWait") == 0) {
+        sem_wait_resource(args);
+    } else if (strcmp(command, "semSignal") == 0) {
+        sem_signal_resource(args);
+    } else {
+        fprintf(stderr, "Error: Unknown command '%s'\n", command);//guys this outputs a formated error message
+    }
+}
+
 
 //sem 
 
