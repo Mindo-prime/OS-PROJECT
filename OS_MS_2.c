@@ -203,12 +203,28 @@ void File_Execution(char* program) {
 }
 
 
+void* exec_1(void* args){
+    File_Execution("Program_1.txt");
+    pthread_exit(NULL);
+}
+
+void* exec_2(void* args){
+    File_Execution("Program_2.txt");
+    pthread_exit(NULL);
+}
+
+void* exec_3(void* args){
+    File_Execution("Program_3.txt");
+    pthread_exit(NULL);
+}
 
 int main(void) {
+
+    pthread_t thread_1, thread_2, thread_3;
     
-    File_Execution("Program_1.txt");
-    File_Execution("Program_2.txt");
-    File_Execution("Program_3.txt");
+    pthread_create(&thread_1,NULL,exec_1,NULL);
+    pthread_create(&thread_2,NULL,exec_2,NULL);
+    pthread_create(&thread_3,NULL,exec_3,NULL);
 
     return 0;
 }
