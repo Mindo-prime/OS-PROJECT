@@ -8,12 +8,13 @@
 
 
 #define MAX_LINE_LENGTH 1024
-#define MAX_VARS_PER 100  // look i am not sure here but it isnt i wish we used c++
+#define MAX_VARS_PER 3  // look i am not sure here but it isnt i wish we used c++
 #define MAX_NAME_LENGTH 50
 #define MAX_VALUE_LENGTH 1024
 #define MEMORY_SIZE 60 // Because we need 60 words bruh 
 #define MAX_PROCESSES 3 // only three i think for now
 #define NUM_PCB 6 //NUmber of vaariables in the PCB guys we might need to increase it UwU 
+#define MAX_FILE_BUFFER 10000
 
 pthread_mutex_t mutexRW = PTHREAD_MUTEX_INITIALIZER;//Accessing a file, to read or to write.
 pthread_mutex_t mutexInput = PTHREAD_MUTEX_INITIALIZER;//Taking user input
@@ -37,14 +38,14 @@ typedef enum {
     T_PCB,
     GAY,
     MINDO
-} type;
+} MemType;
 
 // Memory word
 typedef struct {
     char name[MAX_NAME_LENGTH];
     char value[MAX_VALUE_LENGTH];
     int process_id;   // To track which process owns this memory word
-    type type;       // 0 = var, 1 = pcb, 2 = code
+    MemType type;       // 0 = var, 1 = pcb, 2 = code
 } MemoryWord;
 
 // PCB
@@ -74,6 +75,66 @@ static NamedMutex named_mutexes[] = {
     { "userOutput", &mutexOutput }
 };
 #define NUM_MUTEXES (sizeof(named_mutexes) / sizeof(named_mutexes[0]))
+
+//sem 
+
+void init_mutex(){
+    if (pthread_mutex_init(&mutexRW,NULL) != 0 ||
+     pthread_mutex_init(&mutexInput,NULL) != 0 ||
+     pthread_mutex_init(&mutexOutput,NULL) != 0) {
+        printf("error");
+    }
+}
+
+int find_mutex(const char *name) {
+    for (int i = 0; i < NUM_MUTEXES; i++) {
+        if (strcmp(named_mutexes[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+char *process_read_file(const char *path);
+
+//variable
+
+int find_variable(char *name, int process_id) {
+    pthread_mutex_lock(&mutexMemory);
+    for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
+        if (memory[i].type == VAR && strcmp(memory[i].name, name) == 0) {
+            pthread_mutex_unlock(&mutexMemory);
+            return i;
+        }
+    }
+    pthread_mutex_unlock(&mutexMemory);
+    return -1;
+}
+
+char* get_variable_value(char *name, int process_id) {
+    int index = find_variable(name, process_id);
+    if (index != -1) {
+        return memory[index].value;
+    }
+    return NULL;
+}
+
+void set_variable(char *name, char *value, int process_id) {
+    int index = find_variable(name, process_id);
+    pthread_mutex_lock(&mutexMemory);
+    if (index != -1) {
+        strcpy(memory[index].value, value);
+    } else {
+        for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
+            if (memory[i].type == VAR && memory[i].name[0] == '\0') {
+                strcpy(memory[i].name, name);
+                strcpy(memory[i].value, value);
+                pthread_mutex_unlock(&mutexMemory);
+                return;
+            }
+        }
+        printf("Error: No variable space available for process %d\n", process_id);
+    }
+    pthread_mutex_unlock(&mutexMemory);
+}
 
 
 void trim(char *str) {
@@ -118,6 +179,7 @@ void process_assign(char * args,int process_id){
         char user_input[MAX_VALUE_LENGTH];
         printf("Please enter a value \n");
         if (fgets(user_input, MAX_VALUE_LENGTH, stdin)) {
+            printf("user_input = %s\n",user_input);
             size_t len = strlen(user_input);
             if (len > 0 && user_input[len-1] == '\n') {
                 user_input[len-1] = '\0';
@@ -131,19 +193,17 @@ void process_assign(char * args,int process_id){
         set_variable(name,op,process_id);
     }
 }
-char* process_read_file(char* args){
-    FILE *fptr = fopen(args,"r");
-
-    char content[100];
-    char res[10000000];
-    if (fptr != NULL){
-        while(fgets(content,100,fptr)){
-            strcat(res,content);
-        }
-    }else
-        printf("an error occured reading the file.");
-    fclose(fptr);
-    return res;
+//chatGPT
+char *process_read_file(const char *path) {
+    static char buf[MAX_FILE_BUFFER];
+    FILE *f = fopen(path, "r");
+    if (!f) return NULL;
+    buf[0] = '\0';
+    while (fgets(buf + strlen(buf), MAX_FILE_BUFFER - strlen(buf), f)) {
+        ;
+    }
+    fclose(f);
+    return buf;
 }
 
 void process_write_file(char* args){
@@ -211,7 +271,8 @@ void process_print_from_to (char* args){
     }
     printf("\n");
 }
-void sem_wait_resource(const char *name) {
+void sem_wait_resource(char *name) {
+    trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
         fprintf(stderr, "sem_wait_resource: unknown mutex \"%s\"\n", name);
@@ -219,54 +280,14 @@ void sem_wait_resource(const char *name) {
     }
     pthread_mutex_lock(named_mutexes[idx].mtx);  
 }
-void sem_signal_resource(const char *name) {
+void sem_signal_resource(char *name) {
+    trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
         fprintf(stderr, "sem_signal_resource: unknown mutex \"%s\"\n", name);
         return;
     }
     pthread_mutex_unlock(named_mutexes[idx].mtx);
-}
-
-//variable
-
-char* get_variable_value(char *name, int process_id) {
-    int index = find_variable(name, process_id);
-    if (index != -1) {
-        return memory[index].value;
-    }
-    return NULL;
-}
-
-void set_variable(char *name, char *value, int process_id) {
-    int index = find_variable(name, process_id);
-    pthread_mutex_lock(&mutexMemory);
-    if (index != -1) {
-        strcpy(memory[index].value, value);
-    } else {
-        for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
-            if (memory[i].type == VAR && memory[i].name[0] == '\0') {
-                strcpy(memory[i].name, name);
-                strcpy(memory[i].value, value);
-                pthread_mutex_unlock(&mutexMemory);
-                return;
-            }
-        }
-        printf("Error: No variable space available for process %d\n", process_id);
-    }
-    pthread_mutex_unlock(&mutexMemory);
-}
-
-int find_variable(char *name, int process_id) {
-    pthread_mutex_lock(&mutexMemory);
-    for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
-        if (memory[i].type == VAR && strcmp(memory[i].name, name) == 0) {
-            pthread_mutex_unlock(&mutexMemory);
-            return i;
-        }
-    }
-    pthread_mutex_unlock(&mutexMemory);
-    return -1;
 }
 
 void execute_line(char *line,int process_id) {
@@ -328,25 +349,7 @@ void init_memory() {
     pthread_mutex_unlock(&mutexMemory);
 }
 
-//sem 
-
-void init_mutex(){
-    if (pthread_mutex_init(&mutexRW,NULL) != 0 ||
-     pthread_mutex_init(&mutexInput,NULL) != 0 ||
-     pthread_mutex_init(&mutexOutput,NULL) != 0) {
-        printf("error");
-    }
-}
-
-int find_mutex(const char *name) {
-    for (int i = 0; i < NUM_MUTEXES; i++) {
-        if (strcmp(named_mutexes[i].name, name) == 0)
-            return i;
-    }
-    return -1;
-}
-
-int create_process(char *program, int priority){//hot dog and frezzer you need this part miss you guys can i help with this tooo pleeeeasssee
+int create_process(const char *program, int priority){//hot dog and frezzer you need this part miss you guys can i help with this tooo pleeeeasssee
     pthread_mutex_lock(&mutexMemory);
     if (process_count >= MAX_PROCESSES) {
         printf("Error: Out of process (Ask MINDO)\n");
@@ -377,6 +380,7 @@ int create_process(char *program, int priority){//hot dog and frezzer you need t
         pthread_mutex_unlock(&mutexMemory);
         return -1;
     }
+    printf("line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n",line_count,NUM_PCB,MAX_VARS_PER,line_count + NUM_PCB + MAX_VARS_PER);
     if (line_count + NUM_PCB + MAX_VARS_PER > 60) {//Just the needed memory
         printf("Error: Not enough memory for process must be less than 60 words\n");
         fclose(fptr);
@@ -500,24 +504,44 @@ void* exec_process(void* args) {
     
     pthread_exit(NULL);
 }
+
+void print_memory() {
+    printf("\n------ MEMORY CONTENTS ------\n");
+    for (int i = 0; i < MEMORY_SIZE; i++) {
+        if (memory[i].process_id != -1) {
+            printf("[%2d] Process %d | ", i, memory[i].process_id);
+            
+            if (memory[i].type == T_PCB)
+                printf("PCB | ");
+            else if (memory[i].type == CODE)
+                printf("CODE | ");
+            else if (memory[i].type == VAR)
+                printf("VAR | ");
+            
+            printf("%s: %s\n", memory[i].name, memory[i].value);
+        } else {
+            printf("[%2d] Empty\n", i);
+        }
+    }
+    printf("----------------------------\n\n");
+}
+
 int main(void) {
     init_mutex();
     init_memory();
     pthread_t thread_1, thread_2, thread_3;
-
+    print_memory();
     int pid1 = create_process("Program_1.txt", 0);
     int pid2 = create_process("Program_2.txt", 0);
     int pid3 = create_process("Program_3.txt", 0);
-
-    pthread_t thread_1, thread_2, thread_3;
-    
+    print_memory();
     pthread_create(&thread_1, NULL, exec_process, &pid1);
     pthread_create(&thread_2, NULL, exec_process, &pid2);
     pthread_create(&thread_3, NULL, exec_process, &pid3);
 
-    pthread_join(thread_1, NULL);
-    pthread_join(thread_2, NULL);
-    pthread_join(thread_3, NULL);
+    // pthread_join(thread_1, NULL);
+    // pthread_join(thread_2, NULL);
+    // pthread_join(thread_3, NULL);
 
     return 0;
 }
