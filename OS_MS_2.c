@@ -30,7 +30,7 @@ typedef enum {
     TERMINATED
 } ProcessState;
 
-// Process states
+// Memory Type
 typedef enum {
     VAR,
     CODE,
@@ -346,7 +346,7 @@ int find_mutex(const char *name) {
     return -1;
 }
 
-int create_process(char *program, int S){//hot dog and frezzer you need this part miss you guys can i help with this tooo pleeeeasssee
+int create_process(char *program, int priority){//hot dog and frezzer you need this part miss you guys can i help with this tooo pleeeeasssee
     pthread_mutex_lock(&mutexMemory);
     if (process_count >= MAX_PROCESSES) {
         printf("Error: Out of process (Ask MINDO)\n");
@@ -388,7 +388,7 @@ int create_process(char *program, int S){//hot dog and frezzer you need this par
     
     processes[process_count].process_id = pid;
     processes[process_count].state = NEW;//check the lecture
-    processes[process_count].priority = 0;//your call bros?? scheculing team Hotdog and Frezz
+    processes[process_count].priority = priority;//your call bros?? scheculing team Hotdog and Frezz
     processes[process_count].program_counter = 0;//is it 0 or 1
     processes[process_count].lower_bound = start_index;
     processes[process_count].upper_bound = start_index + line_count + NUM_PCB + MAX_VARS_PER - 1;//just the memeory we need
