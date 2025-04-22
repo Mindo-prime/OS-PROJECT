@@ -12,7 +12,7 @@
 #define MAX_VALUE_LENGTH 1024
 #define MEMORY_SIZE 60 // Because we need 60 words bruh 
 #define MAX_PROCESSES 3 // only three i think for now
-#define NUM_PCB 6 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
+#define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
 #define MAX_FILE_BUFFER 10000
 
 // Added global clock
@@ -148,7 +148,7 @@ void process_print(char * args, int process_id){
         printf("[Clock: %d] Process %d: value not found %s\n", system_clock, process_id, args);
     }
 }
-
+//chatgpt 
 void process_assign(char *args, int process_id) {
     system_clock++;
     
@@ -377,7 +377,7 @@ int create_process(const char *program, int priority){
         return -1;
     }
     if (memory_allocated >= MEMORY_SIZE){
-        printf("[Clock: %d] Error: Out of memory (Ask Ahmed hassen)\n", system_clock);
+        printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
         return -1;
     }
     FILE *fptr = fopen(program,"r");
@@ -392,7 +392,7 @@ int create_process(const char *program, int priority){
             line_count++;
         }
     }
-    if (memory_allocated + line_count + NUM_PCB > MEMORY_SIZE) {
+    if (memory_allocated + line_count + NUM_PCB + MAX_VARS_PER  > MEMORY_SIZE) {
         printf("[Clock: %d] Error: Not enough memory for process\n", system_clock);
         fclose(fptr);
         return -1;
@@ -400,11 +400,6 @@ int create_process(const char *program, int priority){
     printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
            system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
     
-    if (line_count + NUM_PCB + MAX_VARS_PER > 60) {
-        printf("[Clock: %d] Error: Not enough memory for process must be less than 60 words\n", system_clock);
-        fclose(fptr);
-        return -1;
-    }
     int pid = process_count + 1;
     int start_index = memory_allocated;
     
