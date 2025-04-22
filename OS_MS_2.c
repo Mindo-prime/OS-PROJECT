@@ -176,16 +176,21 @@ void process_assign(char * args,int process_id){
     trim(value);
 
     if (strncmp(op, "input", 5) == 0) {
+        //pthread_mutex_lock(&mutexInput);
         char user_input[MAX_VALUE_LENGTH];
-        printf("Please enter a value \n");
+        printf("Please enter a value for %s: ", name);
+        fflush(stdout);
+        
         if (fgets(user_input, MAX_VALUE_LENGTH, stdin)) {
-            printf("user_input = %s\n",user_input);
             size_t len = strlen(user_input);
             if (len > 0 && user_input[len-1] == '\n') {
                 user_input[len-1] = '\0';
             }
-            set_variable(name, user_input,process_id);
+            set_variable(name, user_input, process_id);
+        } else {
+            printf("Error: Failed to read input\n");
         }
+        //pthread_mutex_unlock(&mutexInput);
     }else if (strncmp(op, "readFile", 8) == 0) {        
         process_read_file(value);
         set_variable(name,value,process_id);
@@ -240,32 +245,18 @@ void process_write_file(char* args){
 }
 
 
-void process_print_from_to (char* args){
-
+void process_print_from_to (char* args,int process_id){
     int a, b;
 
-    char *space = strchr(args,' ');
-    char num_1[10];
-    char num_2[10];
-
-    if(space == NULL)
-        printf("Error: Invalid printFromTo format\n");
-
-    int num_1_ln = space - args;
-    if (num_1_ln >= 10)
-        num_1_ln = 9;
-    
-    strncpy(num_1,args,num_1_ln);
-    num_1[9] = '\0';
-    strncpy(num_2,space+1,9);
-    num_2[9] = '\0';
+    char *num_1 = strtok(args, " ");
+    char *num_2 = strtok(NULL, " ");
 
     trim(num_1);
     trim(num_2);
+    a = atoi(get_variable_value(num_1,process_id));
+    b = atoi(get_variable_value(num_2,process_id));
 
-    a = atoi(num_1);
-    b = atoi(num_2);
-
+    printf("num_1 = %s,num_2 = %s,a = %d b = %d \n",num_1,num_2,a,b);
     for (int i = a; i<=b; i++){
         printf("%i\n",i);
     }
@@ -279,6 +270,7 @@ void sem_wait_resource(char *name) {
         return;
     }
     pthread_mutex_lock(named_mutexes[idx].mtx);  
+    printf("sem_wait_resource end %s \n",name);
 }
 void sem_signal_resource(char *name) {
     trim(name);
@@ -291,6 +283,7 @@ void sem_signal_resource(char *name) {
 }
 
 void execute_line(char *line,int process_id) {
+    printf("execute_line = %s \n",line);
     //skip empty lines and comments to end the exection might not be needed
     if (line[0] == '\0') {
         return;
@@ -312,7 +305,7 @@ void execute_line(char *line,int process_id) {
     } else if (strcmp(command, "readFile") == 0) {
         process_read_file(args);
     } else if (strcmp(command, "printFromTo") == 0) {
-        process_print_from_to(args);
+        process_print_from_to(args,process_id);
     } else if (strcmp(command, "semWait") == 0) {
         sem_wait_resource(args);
     } else if (strcmp(command, "semSignal") == 0) {
@@ -473,6 +466,7 @@ int create_process(const char *program, int priority){//hot dog and frezzer you 
     return pid;
 }
 void* exec_process(void* args) {
+    printf("exec_process %p\n",args);
     int process_id = *((int*)args);
     int p_index = process_id - 1;
     
@@ -535,11 +529,12 @@ int main(void) {
     int pid2 = create_process("Program_2.txt", 0);
     int pid3 = create_process("Program_3.txt", 0);
     print_memory();
+    printf("p1 \n");
     pthread_create(&thread_1, NULL, exec_process, &pid1);
-    pthread_create(&thread_2, NULL, exec_process, &pid2);
-    pthread_create(&thread_3, NULL, exec_process, &pid3);
+    //pthread_create(&thread_2, NULL, exec_process, &pid2);
+    //pthread_create(&thread_3, NULL, exec_process, &pid3);
 
-    // pthread_join(thread_1, NULL);
+    pthread_join(thread_1, NULL);
     // pthread_join(thread_2, NULL);
     // pthread_join(thread_3, NULL);
 
