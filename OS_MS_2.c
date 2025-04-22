@@ -530,13 +530,13 @@ void exec_process(int args) {
            processes[p_index].completion_time - processes[p_index].arrival_time);
 }
 
-bool processes_remaining() {//for hotdog and frizz
+int processes_remaining() {//for hotdog and frizz
     for (int i = 0; i < process_count; i++) {
         if (processes[i].state != TERMINATED) {
-            return true;
+            return 1;
         }
     }
-    return false;
+    return 0;
 }
 
 // Update process state in memory
