@@ -2,8 +2,6 @@
 #include <string.h>
 #include <stdlib.h>   
 #include <ctype.h> 
-#include <semaphore.h>
-#include <pthread.h>
 //#include "uthash.h"// didnt work at all sad
 
 
@@ -174,13 +172,10 @@ void process_assign(char *args, int process_id) {
     // Check for input command
     if (strstr(rest, "input") != NULL) {
         char user_input[100];
-        
         printf("Please enter a value for %s: ", name);
         fflush(stdout); // Make sure the prompt is displayed
-        printf("here 1");
         // Using scanf instead of fgets
         scanf("%s", user_input);
-        printf("here 2");
         // Clear the input buffer
         trim(user_input);
         // Set the variable with the input value
@@ -304,7 +299,6 @@ void sem_signal_resource(char *name) {
 }
 
 void execute_line(char *line,int process_id) {
-    printf("execute_line = %s \n",line);
     //skip empty lines and comments to end the exection might not be needed
     if (line[0] == '\0') {
         return;
@@ -525,7 +519,6 @@ void print_memory() {
 int main(void) {
     init_mutex();
     init_memory();
-    pthread_t thread_1, thread_2, thread_3;
     print_memory();
     int pid1 = create_process("Program_1.txt", 0);
     int pid2 = create_process("Program_2.txt", 0);
@@ -533,13 +526,8 @@ int main(void) {
     print_memory();
     printf("p1 \n");
     exec_process(pid1);
-    //pthread_create(&thread_2, NULL, exec_process, &pid2);
-    //pthread_create(&thread_3, NULL, exec_process, &pid3);
-
-    pthread_join(thread_1, NULL);
-    // pthread_join(thread_2, NULL);
-    // pthread_join(thread_3, NULL);
-
+    exec_process(pid2);
+    exec_process(pid3);
     return 0;
 }
 
