@@ -52,6 +52,9 @@ typedef struct {
     int program_counter;
     int lower_bound; 
     int upper_bound;
+/*
+ For Round Robin scheduling for hotdog and frizze ========================================
+*/
     int arrival_time;    // When the process was created
     int completion_time; // When the process finished execution
     int remaining_time;  // For RR scheduling
@@ -59,7 +62,9 @@ typedef struct {
     int code_size;       // Number of code lines
 } PCB;
 
-// For Round Robin scheduling
+/*
+ For Round Robin scheduling for hotdog and frizze ========================================
+*/
 int current_process_index = -1;
 
 MemoryWord memory[MEMORY_SIZE];
@@ -483,6 +488,7 @@ int create_process(const char *program, int priority){
     return pid;
 }
 
+//chatgpt first come fist server 
 void exec_process(int args) {
     int process_id = args;
     int p_index = process_id - 1;
@@ -524,7 +530,9 @@ void exec_process(int args) {
            system_clock, process_id, 
            processes[p_index].completion_time - processes[p_index].arrival_time);
 }
-
+/*
+ For Round Robin scheduling for hotdog and frizze ========================================
+*/
 int processes_remaining() {//for hotdog and frizz
     for (int i = 0; i < process_count; i++) {
         if (processes[i].state != TERMINATED) {
@@ -533,7 +541,9 @@ int processes_remaining() {//for hotdog and frizz
     }
     return 0;
 }
-
+/*
+ For Round Robin scheduling for hotdog and frizze ========================================
+*/
 // Update process state in memory
 void update_process_state(int p_index, ProcessState new_state) {
     const char* state_str;
@@ -567,7 +577,9 @@ void update_process_state(int p_index, ProcessState new_state) {
         }
     }
 }
-
+/*
+ For Round Robin scheduling for hotdog and frizze ========================================
+*/
 int get_next_process() { //for hotdog and frizzer 
     if (process_count == 0) {
         return -1;  // No processes
