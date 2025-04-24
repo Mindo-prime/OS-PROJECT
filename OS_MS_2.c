@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>   
+#include <math.h>
 #include <ctype.h> 
 //#include <stdbool.h>  // Added for bool type
 //#include "uthash.h"// didnt work at all sad
@@ -19,7 +20,7 @@
 #define MLFQ 3
 
 // Added global clock
-int scheduling = ROUND_ROBIN;
+int scheduling = MLFQ;
 int system_clock = 1;
 
 // Process states
@@ -121,7 +122,6 @@ MemoryWord memory[MEMORY_SIZE];
 int memory_allocated = 0;
 queue ready_queue[4];
 PCB current_process = {-1};
-PCB processes[MAX_PROCESSES];
 int process_count = 0;
 
 //sem 
@@ -171,7 +171,6 @@ void set_variable(char *name, char *value) {
         printf("Error: No variable space available for process %d\n", current_process.process_id);
     }
 }
-
 
 void trim(char *str) {
     if (str == NULL || *str == '\0') return; // Null or empty string
@@ -447,26 +446,55 @@ void switch_context(queue* src, queue* dest) {
     }
 }
 
-void run_clock_cycle() {
+queue* find_src(int priority) {
+    for (int i = 0; i <= priority; i++) {
+        if (ready_queue[i].size > 0) {
+            return &ready_queue[i];
+        }
+    }
+    return &ready_queue[0];
+}
+
+void schedule() {
+    char program_done = current_process.program_counter == current_process.code_size;
     switch(scheduling) {
         case ROUND_ROBIN:
-            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || current_process.program_counter == current_process.code_size) {
+            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
+                quantum_tracking = 0;
             }
-            if (quantum_tracking == round_robin_quantum) {
+            if (quantum_tracking == round_robin_quantum || program_done) {
                 quantum_tracking = 0;
             }
             break;
         case FIFO:
-            if (current_process.program_counter == current_process.code_size) {
+            if (current_process.program_counter  == current_process.code_size) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
         case MLFQ:
-            if (quantum_tracking == (1 << (current_process.priority - 1)) || current_process.program_counter == current_process.code_size) {
+            int mlfq_quantum = 1 << (current_process.priority);
+            if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
+                current_process.priority++;
+                int offset = current_process.lower_bound;
+                sprintf(memory[offset + 2].value, "%d", current_process.priority);
+            }
+            int src_priority = current_process.program_counter == current_process.code_size ? 3 : current_process.priority;
+            queue* src = find_src(src_priority);
+            queue* dest = &ready_queue[current_process.priority];
+            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done) {
+                switch_context(src, dest);
+            }
+            if (quantum_tracking == mlfq_quantum || program_done) {
+                quantum_tracking = 0;
             }
             break;
     }
+}
+
+void run_clock_cycle() {
+    // check if new process is to be created
+    schedule();
     if (current_process.process_id == -1) {
         return;
     }
@@ -529,7 +557,7 @@ int create_process(const char *program) {
     mem_index++;
     
     strcpy(memory[mem_index].name, "Priority");
-    sprintf(memory[mem_index].value, "%d", 1);
+    sprintf(memory[mem_index].value, "%d", 0);
     memory[mem_index].process_id = pid;
     memory[mem_index].type = T_PCB;
     mem_index++;
@@ -577,7 +605,7 @@ int create_process(const char *program) {
     process_count++;
     
     printf("[Clock: %d] Process %d created at time %d\n", 
-           system_clock, pid, processes[process_count-1].arrival_time);
+           system_clock, pid, system_clock);
            
     return pid;
 }
@@ -668,11 +696,6 @@ int main(void) {
         print_process_stats();
     }
 
-    int pid4 = create_process("Program_4.txt");
-    if (pid4 > 0) {
-        print_process_stats();
-    }
-    
     
     print_memory();
     while (1) {
@@ -681,6 +704,13 @@ int main(void) {
             break;
         }
     }
+
+    int pid4 = create_process("Program_4.txt");
+    if (pid4 > 0) {
+        print_process_stats();
+    }
+    
+
     printf("[Clock: %d] All processes completed\n", system_clock);
     print_process_stats();
     
