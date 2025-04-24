@@ -504,7 +504,7 @@ void schedule() {
 }
 
 void check_for_processes() {
-    if (program_index < 4 && programs[program_index].arrival_time == system_clock) {
+    while (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
         printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
         create_process(programs[program_index++].name);
     }
@@ -554,8 +554,6 @@ int create_process(const char *program) {
         fclose(fptr);
         return -1;
     }
-    // printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
-    //        system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
     
     int pid = process_count + 1;
     int start_index = memory_allocated;
@@ -686,7 +684,7 @@ int main(void) {
     qsort(programs, total_programs, sizeof(program), compare);
     while (1) {
         run_clock_cycle();
-        if (current_process.process_id == -1 && program_index == 4) {
+        if (current_process.process_id == -1 && program_index == total_programs) {
             break;
         }
     }
