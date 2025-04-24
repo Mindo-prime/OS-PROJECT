@@ -338,7 +338,7 @@ void sem_wait_resource(char *name) {
         fprintf(stderr, "[Clock: %d] sem_wait_resource: unknown mutex \"%s\"\n", system_clock, name);
         return;
     }
-    printf("[Clock: %d] sem_wait_resource end %s \n", system_clock, name);
+    printf("[Clock: %d] Process %d: sem_wait_resource end %s \n", system_clock, current_process.process_id, name);
 }
 
 void sem_signal_resource(char *name) {    
@@ -348,7 +348,7 @@ void sem_signal_resource(char *name) {
         fprintf(stderr, "[Clock: %d] sem_signal_resource: unknown mutex \"%s\"\n", system_clock, name);
         return;
     }
-    printf("[Clock: %d] sem_signal_resource end %s \n", system_clock, name);
+    printf("[Clock: %d] Process %d: sem_signal_resource end %s \n", system_clock, current_process.process_id, name);
 }
 
 void execute_line(char *line) {
