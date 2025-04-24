@@ -12,7 +12,7 @@
 #define MAX_NAME_LENGTH 50
 #define MAX_VALUE_LENGTH 1024
 #define MEMORY_SIZE 60 // Because we need 60 words bruh 
-#define MAX_PROCESSES 3 // only three i think for now
+#define MAX_PROCESSES 6 // only three i think for now
 #define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
 #define MAX_FILE_BUFFER 10000
 #define ROUND_ROBIN 1
@@ -20,7 +20,7 @@
 #define MLFQ 3
 
 // Added global clock
-int scheduling = MLFQ;
+int scheduling = ROUND_ROBIN;
 int system_clock = 1;
 
 // Process states
@@ -62,6 +62,11 @@ typedef struct {
     int code_size;       // Number of code lines
 } PCB;
 
+typedef struct  {
+    char* name;
+    int arrival_time;
+} program;
+
 typedef struct node {
     int value;
     struct node* next;
@@ -71,6 +76,8 @@ typedef struct {
     node* tail;
     int size;
 } queue;
+
+int create_process(const char *program);
 
 void init_queue(queue* q) {
     q->tail = NULL;
@@ -119,6 +126,10 @@ int quantum_tracking = 0;
 
 int MY_clock = 0;
 MemoryWord memory[MEMORY_SIZE];
+int programs_size = 4;
+program programs[MAX_PROCESSES];
+int total_programs = 0;
+int program_index = 0;
 int memory_allocated = 0;
 queue ready_queue[4];
 PCB current_process = {-1};
@@ -492,27 +503,36 @@ void schedule() {
     }
 }
 
+void check_for_processes() {
+    if (program_index < 4 && programs[program_index].arrival_time == system_clock) {
+        printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
+        create_process(programs[program_index++].name);
+    }
+}
+
 void run_clock_cycle() {
     // check if new process is to be created
+    check_for_processes();
     schedule();
     if (current_process.process_id == -1) {
+        printf("[Clock: %d] Idle\n", system_clock);
+        system_clock++;
         return;
     }
     int offset = NUM_PCB + current_process.lower_bound;
     execute_line(memory[current_process.program_counter + offset].value);
-    system_clock++;
     quantum_tracking++;
+    system_clock++;
     current_process.program_counter++;
     offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
 }
 
 int create_process(const char *program) {
-    // Process creation consumes a clock cycle    
-    // if (process_count >= MAX_PROCESSES) {
-    //     printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
-    //     return -1;
-    // }
+    if (process_count >= MAX_PROCESSES) {
+        printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
+        return -1;
+    }
     if (memory_allocated >= MEMORY_SIZE){
         printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
         return -1;
@@ -534,8 +554,8 @@ int create_process(const char *program) {
         fclose(fptr);
         return -1;
     }
-    printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
-           system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
+    // printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
+    //        system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
     
     int pid = process_count + 1;
     int start_index = memory_allocated;
@@ -603,9 +623,6 @@ int create_process(const char *program) {
 
     memory_allocated = mem_index;
     process_count++;
-    
-    printf("[Clock: %d] Process %d created at time %d\n", 
-           system_clock, pid, system_clock);
            
     return pid;
 }
@@ -631,46 +648,16 @@ void print_memory() {
     printf("----------------------------\n\n");
 }
 
-// New function to print process timing statistics
-void print_process_stats() {
-    printf("\n------ PROCESS STATISTICS [Clock: %d] ------\n", system_clock);
-    printf("PID | Priority | Arrival | Completion | Turnaround | Status\n");
-    printf("--------------------------------------------------------\n");
-    
-    for (int i = 0; i < process_count; i++) {
-        int turnaround = -1;
-        char status[20] = "UNKNOWN";
-        
-        if (processes[i].completion_time != -1) {
-            turnaround = processes[i].completion_time - processes[i].arrival_time;
-            strcpy(status, "TERMINATED");
-        } else {
-            switch(processes[i].state) {
-                case NEW: strcpy(status, "NEW"); break;
-                case READY: strcpy(status, "READY"); break;
-                case RUNNING: strcpy(status, "RUNNING"); break;
-                case BLOCKED: strcpy(status, "BLOCKED"); break;
-                default: strcpy(status, "UNKNOWN"); break;
-            }
-        }
-        
-        printf("%3d | %8d | %7d | %10d | %10d | %s\n", 
-               processes[i].process_id, 
-               processes[i].priority, 
-               processes[i].arrival_time, 
-               processes[i].completion_time, 
-               turnaround, 
-               status);
-    }
-    printf("-------------------------------------------\n\n");
-}
-
 void init() {
     init_mutex();
     init_memory();
     for (int i = 0; i < 3; i++) {
         init_queue(&ready_queue[i]);
     }
+}
+
+int compare(const void *a, const void *b) {
+    return ((program *)a)->arrival_time - ((program *)b)->arrival_time;
 }
 
 int main(void) {
@@ -680,39 +667,30 @@ int main(void) {
     printf("[Clock: %d] System initialized\n", system_clock);
     print_memory();
     
-    int pid1 = create_process("Program_1.txt");
-    print_memory();
-    if (pid1 > 0) {
-        print_process_stats();
-    }
-    
-    int pid2 = create_process("Program_2.txt");
-    if (pid2 > 0) {
-        print_process_stats();
-    }
-    
-    int pid3 = create_process("Program_3.txt");
-    if (pid3 > 0) {
-        print_process_stats();
+    char buffer[1024];
+    while (total_programs < MAX_PROCESSES) {
+        printf("Enter process name (or \"done\") - maximum of %d processes: ", MAX_PROCESSES);
+        if (!fgets(buffer, MAX_NAME_LENGTH, stdin)) break;
+        buffer[strcspn(buffer, "\n")] = '\0';
+        if (strcmp(buffer, "done") == 0) break;
+        programs[total_programs].name = malloc(strlen(buffer));
+        strcpy(programs[total_programs].name, buffer);
+
+        printf("Enter arrival time: ");
+        if (scanf("%d", &programs[total_programs].arrival_time) != 1) break;
+        getchar();
+
+        total_programs++;
     }
 
-    
-    print_memory();
+    qsort(programs, total_programs, sizeof(program), compare);
     while (1) {
         run_clock_cycle();
-        if (current_process.process_id == -1) {
+        if (current_process.process_id == -1 && program_index == 4) {
             break;
         }
     }
-
-    int pid4 = create_process("Program_4.txt");
-    if (pid4 > 0) {
-        print_process_stats();
-    }
     
-
     printf("[Clock: %d] All processes completed\n", system_clock);
-    print_process_stats();
-    
     return 0;
 }
