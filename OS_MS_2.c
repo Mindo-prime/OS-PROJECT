@@ -658,17 +658,17 @@ int main(void) {
         print_process_stats();
     }
     
-    int pid2 = create_process("Program_2.txt", 0);
+    int pid2 = create_process("Program_2.txt");
     if (pid2 > 0) {
         print_process_stats();
     }
     
-    int pid3 = create_process("Program_3.txt", 0);
+    int pid3 = create_process("Program_3.txt");
     if (pid3 > 0) {
         print_process_stats();
     }
 
-    int pid4 = create_process("Program_4.txt", 0);
+    int pid4 = create_process("Program_4.txt");
     if (pid4 > 0) {
         print_process_stats();
     }
