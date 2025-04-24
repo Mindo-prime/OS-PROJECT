@@ -14,9 +14,13 @@
 #define MAX_PROCESSES 3 // only three i think for now
 #define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
 #define MAX_FILE_BUFFER 10000
+#define ROUND_ROBIN 1
+#define FIFO 2
+#define MLFQ 3
 
 // Added global clock
-int system_clock = 0;
+int scheduling = FIFO;
+int system_clock = 1;
 
 // Process states
 typedef enum {
@@ -52,24 +56,75 @@ typedef struct {
     int program_counter;
     int lower_bound; 
     int upper_bound;
-/*
- For Round Robin scheduling for hotdog and frizze ========================================
-*/
     int arrival_time;    // When the process was created
     int completion_time; // When the process finished execution
-    int remaining_time;  // For RR scheduling
-    int quantum_used;    // For RR scheduling
     int code_size;       // Number of code lines
 } PCB;
 
+typedef struct node {
+    int value;
+    struct node* next;
+} node;
+
+typedef struct {
+    node* tail;
+    int size;
+} queue;
+
+void init_queue(queue* q) {
+    q->tail = NULL;
+    q->size = 0;
+}
+
+void push(queue* q, int value) {
+    node* new_node = (node*) malloc(sizeof(node));
+    new_node->value = value;
+    if (q->tail == NULL) {
+        q->tail = new_node;
+        q->tail->next = new_node;
+    } else {
+        new_node->next = q->tail->next;
+        q->tail->next = new_node;
+        q->tail = new_node;
+    }
+    q->size++;
+}
+
+int pop(queue* q) {
+    if (q->size == 0) {
+        return -1;
+    }
+    int value = q->tail->next->value;
+    node* temp = q->tail->next;
+    if (q->size == 1) {
+        q->tail = NULL;
+    } else {
+        q->tail->next = q->tail->next->next;
+    }
+    q->size--;
+    free(temp);
+    return value;
+}
+
+int peek(queue* q) {
+    if (q->size == 0) {
+        return -1;
+    }
+    return q->tail->next->value;
+}
+
 /*
  For Round Robin scheduling for hotdog and frizze ========================================
 */
-int current_process_index = -1;
+int round_robin_quantum = 1;
+int quantum_tracking = 0;
 
+int MY_clock = 0;
 MemoryWord memory[MEMORY_SIZE];
 int memory_allocated = 0;
-
+queue ready_queue;
+queue mlfq_ready_queue[4];
+PCB current_process = {-1};
 PCB processes[MAX_PROCESSES];
 int process_count = 0;
 
@@ -86,9 +141,9 @@ char *process_read_file(const char *path);
 
 //variable
 
-int find_variable(char *name, int process_id) {
-  
-    for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
+int find_variable(char *name) {
+    int offset = NUM_PCB + current_process.code_size;
+    for (int i = current_process.lower_bound + offset; i <= current_process.upper_bound; i++) {
         if (memory[i].type == VAR && strcmp(memory[i].name, name) == 0) {
             return i;
         }
@@ -96,27 +151,28 @@ int find_variable(char *name, int process_id) {
     return -1;
 }
 
-char* get_variable_value(char *name, int process_id) {
-    int index = find_variable(name, process_id);
+char* get_variable_value(char *name) {
+    int index = find_variable(name);
     if (index != -1) {
         return memory[index].value;
     }
     return NULL;
 }
 
-void set_variable(char *name, char *value, int process_id) {
-    int index = find_variable(name, process_id);
+void set_variable(char *name, char *value) {
+    int index = find_variable(name);
     if (index != -1) {
         strcpy(memory[index].value, value);
     } else {
-        for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
+        int offset = NUM_PCB + current_process.code_size;
+        for (int i = current_process.lower_bound + offset; i <= current_process.upper_bound; i++) {
             if (memory[i].type == VAR && memory[i].name[0] == '\0') {
                 strcpy(memory[i].name, name);
                 strcpy(memory[i].value, value);
                 return;
             }
         }
-        printf("Error: No variable space available for process %d\n", process_id);
+        printf("Error: No variable space available for process %d\n", current_process.process_id);
     }
 }
 
@@ -142,24 +198,20 @@ void trim(char *str) {
 }
 
 
-void process_print(char * args, int process_id){
-    system_clock++;
-    
+void process_print(char * args) {    
     trim(args);
-    char *value = get_variable_value(args, process_id);
+    char *value = get_variable_value(args);
     if (value != NULL) {
-        printf("[Clock: %d] Process %d: %s = %s\n", system_clock, process_id, args, value);
+        printf("[Clock: %d] Process %d: %s = %s\n", system_clock, current_process.process_id, args, value);
     } else {
-        printf("[Clock: %d] Process %d: value not found %s\n", system_clock, process_id, args);
+        printf("[Clock: %d] Process %d: value not found %s\n", system_clock, current_process.process_id, args);
     }
 }
 //chatgpt 
-void process_assign(char *args, int process_id) {
-    system_clock++;
-    
+void process_assign(char *args) {    
     // First, check if args is NULL
     if (args == NULL) {
-        printf("[Clock: %d] Process %d: Error: Invalid assign command (NULL args)\n", system_clock, process_id);
+        printf("[Clock: %d] Process %d: Error: Invalid assign command (NULL args)\n", system_clock, current_process.process_id);
         return;
     }
     
@@ -172,7 +224,7 @@ void process_assign(char *args, int process_id) {
     char *name = strtok_r(args_copy, " ", &token_context);
     
     if (name == NULL) {
-        printf("[Clock: %d] Process %d: Error: Missing variable name in assign command\n", system_clock, process_id);
+        printf("[Clock: %d] Process %d: Error: Missing variable name in assign command\n", system_clock, current_process.process_id);
         return;
     }
     
@@ -181,35 +233,35 @@ void process_assign(char *args, int process_id) {
     // Get the rest of the command after the variable name
     char *rest = strtok_r(NULL, "", &token_context);
     if (rest == NULL) {
-        printf("[Clock: %d] Process %d: Error: Missing value in assign command\n", system_clock, process_id);
+        printf("[Clock: %d] Process %d: Error: Missing value in assign command\n", system_clock, current_process.process_id);
         return;
     }
     
     // Check for input command
     if (strstr(rest, "input") != NULL) {
         char user_input[100];
-        printf("[Clock: %d] Process %d: Please enter a value for %s: ", system_clock, process_id, name);
+        printf("[Clock: %d] Process %d: Please enter a value for %s: ", system_clock, current_process.process_id, name);
         fflush(stdout); // Make sure the prompt is displayed
         // Using scanf instead of fgets
         scanf("%s", user_input);
         // Clear the input buffer
         trim(user_input);
         // Set the variable with the input value
-        set_variable(name, user_input, process_id);
+        set_variable(name, user_input);
     }
     // Check for readFile command
     else if (strstr(rest, "readFile") != NULL) {
         // Extract the filename
         char *filepath = strstr(rest, "readFile") + 8;  // Skip "readFile"
         trim(filepath);
-        char *path = get_variable_value(filepath, process_id);
+        char *path = get_variable_value(filepath);
         trim(path);
         
         char *file_content = process_read_file(path);
         if (file_content != NULL) {
-            set_variable(name, file_content, process_id);
+            set_variable(name, file_content);
         } else {
-            printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, process_id, filepath);
+            printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, current_process.process_id, filepath);
         }
     }
     // Direct assignment
@@ -217,68 +269,55 @@ void process_assign(char *args, int process_id) {
         trim(rest);
         
         // Check if value is another variable
-        char *var_value = get_variable_value(rest, process_id);
+        char *var_value = get_variable_value(rest);
         if (var_value != NULL) {
-            set_variable(name, var_value, process_id);
+            set_variable(name, var_value);
         } else {
             // Direct value assignment
-            set_variable(name, rest, process_id);
+            set_variable(name, rest);
         }
     }
 }
 
 //chatGPT
-char *process_read_file(const char *path) {
-    system_clock++;
-    
+char *process_read_file(const char *path) {    
     static char buf[MAX_FILE_BUFFER];
     FILE *f = fopen(path, "r");
     if (!f) return NULL;
     buf[0] = '\0';
-    while (fgets(buf + strlen(buf), MAX_FILE_BUFFER - strlen(buf), f)) {
-        ;
-    }
+    while (fgets(buf + strlen(buf), MAX_FILE_BUFFER - strlen(buf), f)) {}
     fclose(f);
     return buf;
 }
 
-void process_write_file(char* args, int process_id){
-    system_clock++;
-    
+void process_write_file(char* args){    
     char *space = strchr(args,' ');
-    char name[100];
-    char data[100];
 
-    if(space == NULL)
-        printf("[Clock: %d] Process %d: Error: Invalid printFromTo format\n", system_clock, process_id);
-    
-    else{
-        int name_ln = space - args;
-        if (name_ln >= 100)
-        name_ln = 99;
-        strncpy(name,args, name_ln);
-        name[name_ln] = '\0';
-        strncpy(data,space+1,99);
-        data[99] = '\0';
+    char* num_1 = strtok(args, " ");
+    char* num_2 = strtok(NULL, " ");
+    trim(num_1);
+    trim(num_2);
+    char* name = get_variable_value(num_1);
+    char* data = get_variable_value(num_2);
+
+    if(space == NULL) {
+        printf("[Clock: %d] Process %d: Error: Invalid writeFile format\n", system_clock, current_process.process_id);
+        return;
     }
-
     trim(name);
     trim(data);
-
     FILE *fptr = fopen(name,"w");
 
     if (fptr != NULL){
         fputs(data,fptr);
-        printf("[Clock: %d] Process %d: File written successfully\n", system_clock, process_id);
+        printf("[Clock: %d] Process %d: File written successfully\n", system_clock, current_process.process_id);
     }else
-        printf("[Clock: %d] Process %d: An error occurred writing to the file.\n", system_clock, process_id);
+        printf("[Clock: %d] Process %d: An error occurred writing to the file.\n", system_clock, current_process.process_id);
 
     fclose(fptr);
 }
 
-void process_print_from_to(char* args, int process_id){
-    system_clock++;
-    
+void process_print_from_to(char* args){    
     int a, b;
 
     char *num_1 = strtok(args, " ");
@@ -286,10 +325,10 @@ void process_print_from_to(char* args, int process_id){
 
     trim(num_1);
     trim(num_2);
-    a = atoi(get_variable_value(num_1, process_id));
-    b = atoi(get_variable_value(num_2, process_id));
+    a = atoi(get_variable_value(num_1));
+    b = atoi(get_variable_value(num_2));
 
-    printf("[Clock: %d] Process %d: num_1 = %s, num_2 = %s, a = %d b = %d \n", system_clock, process_id, num_1, num_2, a, b);
+    printf("[Clock: %d] Process %d: num_1 = %s, num_2 = %s, a = %d b = %d \n", system_clock, current_process.process_id, num_1, num_2, a, b);
     for (int i = a; i <= b; i++){
         printf("%i\n", i);
     }
@@ -297,8 +336,6 @@ void process_print_from_to(char* args, int process_id){
 }
 
 void sem_wait_resource(char *name) {
-    system_clock++;
-    
     trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
@@ -308,9 +345,7 @@ void sem_wait_resource(char *name) {
     printf("[Clock: %d] sem_wait_resource end %s \n", system_clock, name);
 }
 
-void sem_signal_resource(char *name) {
-    system_clock++;
-    
+void sem_signal_resource(char *name) {    
     trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
@@ -320,7 +355,7 @@ void sem_signal_resource(char *name) {
     printf("[Clock: %d] sem_signal_resource end %s \n", system_clock, name);
 }
 
-void execute_line(char *line, int process_id) {
+void execute_line(char *line) {
     if (line[0] == '\0') {
         return;
     }
@@ -333,33 +368,24 @@ void execute_line(char *line, int process_id) {
     if (!args) args = empty_string;
     
     if (strcmp(command, "print") == 0) {
-        process_print(args, process_id);
+        process_print(args);
     } else if (strcmp(command, "assign") == 0) {
-        process_assign(args, process_id);
+        process_assign(args);
     } else if (strcmp(command, "writeFile") == 0) {
-        process_write_file(args, process_id);
+        process_write_file(args);
     } else if (strcmp(command, "readFile") == 0) {
         process_read_file(args);
     } else if (strcmp(command, "printFromTo") == 0) {
-        process_print_from_to(args, process_id);
+        process_print_from_to(args);
     } else if (strcmp(command, "semWait") == 0) {
         sem_wait_resource(args);
     } else if (strcmp(command, "semSignal") == 0) {
         sem_signal_resource(args);
     } else {
-        fprintf(stderr, "[Clock: %d] Process %d: Error: Unknown command '%s'\n", system_clock, process_id, command);
+        fprintf(stderr, "[Clock: %d] Process %d: Error: Unknown command '%s'\n", system_clock, current_process.process_id, command);
     }
     
     // Update program counter in the PCB
-    for (int i = processes[process_id-1].lower_bound; i <= processes[process_id-1].upper_bound; i++) {
-        if (memory[i].type == T_PCB && strcmp(memory[i].name, "PC") == 0) {
-            int pc = atoi(memory[i].value);
-            processes[process_id-1].program_counter++;
-            pc++;
-            sprintf(memory[i].value, "%d", pc);
-            break;
-        }
-    }
 }
 
 // Initialize memory
@@ -373,14 +399,99 @@ void init_memory() {
     memory_allocated = 0;
 }
 
-int create_process(const char *program, int priority){
-    // Process creation consumes a clock cycle
-    system_clock++;
-    
-    if (process_count >= MAX_PROCESSES) {
-        printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
-        return -1;
+int state_to_int(char* state) {
+    if (strcmp(state, "NEW") == 0) {
+        return 0;
+    } else if (strcmp(state, "READY") == 0) {
+        return 1;
+    } else if (strcmp(state, "RUNNING") == 0) {
+        return 2;
+    } else if (strcmp(state, "BLOCKED") == 0) {
+        return 3;
+    } else if (strcmp(state, "TERMINATED") == 0) {
+        return 4;
     }
+    return -1;
+}
+
+PCB load_PCB(int address) {
+    if (address < 0 || address >= MEMORY_SIZE || memory[address].type != T_PCB || strcmp(memory[address].name, "Process_ID") != 0) {
+        printf("Error: invalid PCB address.\n");
+        return (PCB) {-1};
+    }
+    PCB process;
+    process.process_id = atoi(memory[address].value);
+    process.state = (ProcessState) state_to_int(memory[address + 1].value);
+    process.priority = atoi(memory[address + 2].value);
+    process.program_counter = atoi(memory[address + 3].value);
+    sscanf(memory[address + 4].value, "%d-%d", &process.lower_bound, &process.upper_bound);
+    process.code_size = process.upper_bound - process.lower_bound - NUM_PCB - 2;
+    return process;
+}
+
+void rr_fifo_init_process(int address) {
+    push(&ready_queue, address);
+}
+
+void mlfq_init_process(int address) {
+
+}
+
+void rr_fifo_switch_context() {
+    int offset = current_process.lower_bound;
+    if (current_process.process_id != -1 && current_process.program_counter != current_process.code_size) {
+        current_process.state = READY;
+        strcpy(memory[offset + 1].value, "READY");
+        push(&ready_queue, current_process.lower_bound);
+    }
+    if (current_process.process_id != -1 && current_process.program_counter == current_process.code_size) {
+        strcpy(memory[offset + 1].value, "TERMINATED");
+    }
+    if (ready_queue.size > 0) {
+        current_process = load_PCB(pop(&ready_queue));
+        offset = current_process.lower_bound;
+        current_process.state = RUNNING;
+        strcpy(memory[offset + 1].value, "RUNNING");
+    } else {
+        current_process.process_id = -1;
+    }
+    quantum_tracking = 0;
+}
+
+void run_clock_cycle() {
+    switch(scheduling) {
+        case ROUND_ROBIN:
+            if (quantum_tracking == round_robin_quantum || current_process.program_counter == current_process.code_size) {
+                rr_fifo_switch_context();
+            }
+            break;
+        case FIFO:
+            if (current_process.program_counter == current_process.code_size) {
+                rr_fifo_switch_context();
+            }
+            break;
+        case MLFQ:
+            break;
+    }
+    if (current_process.process_id == -1) {
+        return;
+    }
+    int offset = NUM_PCB + current_process.lower_bound;
+    execute_line(memory[current_process.program_counter + offset].value);
+    system_clock++;
+    quantum_tracking++;
+    current_process.program_counter++;
+    offset = current_process.lower_bound;
+    sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
+    offset = current_process.lower_bound;
+}
+
+int create_process(const char *program, int priority) {
+    // Process creation consumes a clock cycle    
+    // if (process_count >= MAX_PROCESSES) {
+    //     printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
+    //     return -1;
+    // }
     if (memory_allocated >= MEMORY_SIZE){
         printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
         return -1;
@@ -407,19 +518,14 @@ int create_process(const char *program, int priority){
     
     int pid = process_count + 1;
     int start_index = memory_allocated;
-    
-    processes[process_count].process_id = pid;
-    processes[process_count].state = READY;
-    processes[process_count].priority = priority;
-    processes[process_count].program_counter = 0;
-    processes[process_count].lower_bound = start_index;
-    processes[process_count].upper_bound = start_index + line_count + NUM_PCB + MAX_VARS_PER - 1;
-    processes[process_count].arrival_time = system_clock;  // Record arrival time
-    processes[process_count].completion_time = -1;        // Not completed yet
-    processes[process_count].quantum_used = 0;           // Initialize quantum
-    processes[process_count].code_size = line_count;     // Number of code lines
+    int mem_index = memory_allocated;
 
-    int mem_index = start_index;
+    switch(scheduling) {
+        case ROUND_ROBIN: rr_fifo_init_process(start_index); break;
+        case FIFO: rr_fifo_init_process(start_index); break;
+        case MLFQ: mlfq_init_process(start_index); break;
+    }
+
 
     //PCB
     strcpy(memory[mem_index].name, "Process_ID");
@@ -488,116 +594,6 @@ int create_process(const char *program, int priority){
     return pid;
 }
 
-//chatgpt first come fist server 
-void exec_process(int args) {
-    int process_id = args;
-    int p_index = process_id - 1;
-    
-    // Set process to running
-    processes[p_index].state = RUNNING;
-    printf("[Clock: %d] Process %d begins execution\n", system_clock, process_id);
-    
-    // Update state in memory
-    for (int i = processes[p_index].lower_bound; i <= processes[p_index].lower_bound + NUM_PCB; i++) {
-        if (memory[i].type == T_PCB && strcmp(memory[i].name, "State") == 0) {
-            strcpy(memory[i].value, "RUNNING");
-            break;
-        }
-    }
-    
-    // Execute each instruction in the process
-    for (int i = processes[p_index].lower_bound + NUM_PCB; i <= processes[p_index].upper_bound; i++) {
-        if (memory[i].type == CODE) {
-            execute_line(memory[i].value, process_id);
-        }
-    }
-    
-    // Record completion time
-    processes[p_index].completion_time = system_clock;
-    processes[p_index].state = TERMINATED;
-    
-    // Update memory with termination info
-    for (int i = processes[p_index].lower_bound; i <= processes[p_index].lower_bound + NUM_PCB; i++) {
-        if (memory[i].type == T_PCB && strcmp(memory[i].name, "State") == 0) {
-            strcpy(memory[i].value, "TERMINATED");
-        }
-        if (memory[i].type == T_PCB && strcmp(memory[i].name, "Completion_Time") == 0) {
-            sprintf(memory[i].value, "%d", system_clock);
-        }
-    }
-    
-    printf("[Clock: %d] Process %d terminated. Execution time: %d cycles\n", 
-           system_clock, process_id, 
-           processes[p_index].completion_time - processes[p_index].arrival_time);
-}
-/*
- For Round Robin scheduling for hotdog and frizze ========================================
-*/
-int processes_remaining() {//for hotdog and frizz
-    for (int i = 0; i < process_count; i++) {
-        if (processes[i].state != TERMINATED) {
-            return 1;
-        }
-    }
-    return 0;
-}
-/*
- For Round Robin scheduling for hotdog and frizze ========================================
-*/
-// Update process state in memory
-void update_process_state(int p_index, ProcessState new_state) {
-    const char* state_str;
-    
-    switch (new_state) {
-        case NEW:
-            state_str = "NEW";
-            break;
-        case READY:
-            state_str = "READY";
-            break;
-        case RUNNING:
-            state_str = "RUNNING";
-            break;
-        case BLOCKED:
-            state_str = "BLOCKED";
-            break;
-        case TERMINATED:
-            state_str = "TERMINATED";
-            break;
-        default:
-            state_str = "UNKNOWN";
-    }
-    
-    processes[p_index].state = new_state;
-    
-    for (int i = processes[p_index].lower_bound; i <= processes[p_index].lower_bound + NUM_PCB; i++) {
-        if (memory[i].type == T_PCB && strcmp(memory[i].name, "State") == 0) {
-            strcpy(memory[i].value, state_str);
-            break;
-        }
-    }
-}
-/*
- For Round Robin scheduling for hotdog and frizze ========================================
-*/
-int get_next_process() { //for hotdog and frizzer 
-    if (process_count == 0) {
-        return -1;  // No processes
-    }
-
-    int start = (current_process_index + 1) % process_count;
-    int index = start;
-    
-    do {
-        if (processes[index].state == READY) {
-            return index;
-        }
-        index = (index + 1) % process_count;
-    } while (index != start);
-    
-    return -1;
-}
-
 void print_memory() {
     printf("\n------ MEMORY CONTENTS [Clock: %d] ------\n", system_clock);
     for (int i = 0; i < MEMORY_SIZE; i++) {
@@ -653,32 +649,45 @@ void print_process_stats() {
     printf("-------------------------------------------\n\n");
 }
 
-int main(void) {
-    system_clock = 0;  // Initialize system clock
+void init() {
     init_mutex();
     init_memory();
+    init_queue(&ready_queue);
+}
+
+int main(void) {
+    system_clock = 1;  // Initialize system clock
+    init();
     
     printf("[Clock: %d] System initialized\n", system_clock);
     print_memory();
     
     int pid1 = create_process("Program_1.txt", 0);
+    print_memory();
     if (pid1 > 0) {
-        exec_process(pid1);
         print_process_stats();
     }
     
     int pid2 = create_process("Program_2.txt", 0);
     if (pid2 > 0) {
-        exec_process(pid2);
         print_process_stats();
     }
     
     int pid3 = create_process("Program_3.txt", 0);
     if (pid3 > 0) {
-        exec_process(pid3);
+        print_process_stats();
+    }
+
+    int pid4 = create_process("Program_4.txt", 0);
+    if (pid4 > 0) {
         print_process_stats();
     }
     
+    
+    print_memory();
+    while (current_process.process_id != -1 || ready_queue.size > 0) {
+        run_clock_cycle();
+    }
     printf("[Clock: %d] All processes completed\n", system_clock);
     print_process_stats();
     
