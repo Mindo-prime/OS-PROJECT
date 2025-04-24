@@ -19,7 +19,7 @@
 #define MLFQ 3
 
 // Added global clock
-int scheduling = FIFO;
+int scheduling = ROUND_ROBIN;
 int system_clock = 1;
 
 // Process states
@@ -116,7 +116,7 @@ int peek(queue* q) {
 /*
  For Round Robin scheduling for hotdog and frizze ========================================
 */
-int round_robin_quantum = 1;
+int round_robin_quantum = 2;
 int quantum_tracking = 0;
 
 int MY_clock = 0;
@@ -440,7 +440,6 @@ void mlfq_init_process(int address) {
 void rr_fifo_switch_context() {
     int offset = current_process.lower_bound;
     if (current_process.process_id != -1 && current_process.program_counter != current_process.code_size) {
-        current_process.state = READY;
         strcpy(memory[offset + 1].value, "READY");
         push(&ready_queue, current_process.lower_bound);
     }
@@ -452,7 +451,7 @@ void rr_fifo_switch_context() {
         offset = current_process.lower_bound;
         current_process.state = RUNNING;
         strcpy(memory[offset + 1].value, "RUNNING");
-    } else {
+    } else if (current_process.program_counter == current_process.code_size) {
         current_process.process_id = -1;
     }
     quantum_tracking = 0;
@@ -483,7 +482,6 @@ void run_clock_cycle() {
     current_process.program_counter++;
     offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
-    offset = current_process.lower_bound;
 }
 
 int create_process(const char *program, int priority) {
