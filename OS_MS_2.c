@@ -113,24 +113,20 @@ int peek(queue* q) {
     return q->tail->next->value;
 }
 
-/*
- For Round Robin scheduling for hotdog and frizze ========================================
-*/
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
 
 int MY_clock = 0;
 MemoryWord memory[MEMORY_SIZE];
 int memory_allocated = 0;
-queue ready_queue;
-queue mlfq_ready_queue[4];
+queue ready_queue[4];
 PCB current_process = {-1};
 PCB processes[MAX_PROCESSES];
 int process_count = 0;
 
 //sem 
 
-void init_mutex(){
+void init_mutex() {
     
 }
 
@@ -429,46 +425,46 @@ PCB load_PCB(int address) {
     return process;
 }
 
-void rr_fifo_init_process(int address) {
-    push(&ready_queue, address);
+void init_process(int address) {
+    push(&ready_queue[0], address);
 }
 
-void mlfq_init_process(int address) {
-
-}
-
-void rr_fifo_switch_context() {
+void switch_context(queue* src, queue* dest) {
     int offset = current_process.lower_bound;
-    if (current_process.process_id != -1 && current_process.program_counter == current_process.code_size) {
-        strcpy(memory[offset + 1].value, "TERMINATED");
-    }
-    if (ready_queue.size > 0) {
-        if (current_process.process_id != -1 && current_process.program_counter != current_process.code_size) {
+    if (current_process.process_id != -1) {
+        if (current_process.program_counter == current_process.code_size) {
+            strcpy(memory[offset + 1].value, "TERMINATED");
+            current_process.process_id = -1;
+        } else {
             strcpy(memory[offset + 1].value, "READY");
-            push(&ready_queue, current_process.lower_bound);
+            push(dest, current_process.lower_bound);
         }
-        current_process = load_PCB(pop(&ready_queue));
+    }
+    if (src->size > 0) {
+        current_process = load_PCB(pop(src));
         offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "RUNNING");
-    } else if (current_process.program_counter == current_process.code_size) {
-        current_process.process_id = -1;
     }
-    quantum_tracking = 0;
 }
 
 void run_clock_cycle() {
     switch(scheduling) {
         case ROUND_ROBIN:
-            if (quantum_tracking == round_robin_quantum || current_process.program_counter == current_process.code_size) {
-                rr_fifo_switch_context();
+            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || current_process.program_counter == current_process.code_size) {
+                switch_context(&ready_queue[0], &ready_queue[0]);
+            }
+            if (quantum_tracking == round_robin_quantum) {
+                quantum_tracking = 0;
             }
             break;
         case FIFO:
             if (current_process.program_counter == current_process.code_size) {
-                rr_fifo_switch_context();
+                switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
         case MLFQ:
+            if (quantum_tracking == (1 << (current_process.priority - 1)) || current_process.program_counter == current_process.code_size) {
+            }
             break;
     }
     if (current_process.process_id == -1) {
@@ -483,7 +479,7 @@ void run_clock_cycle() {
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
 }
 
-int create_process(const char *program, int priority) {
+int create_process(const char *program) {
     // Process creation consumes a clock cycle    
     // if (process_count >= MAX_PROCESSES) {
     //     printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
@@ -517,12 +513,7 @@ int create_process(const char *program, int priority) {
     int start_index = memory_allocated;
     int mem_index = memory_allocated;
 
-    switch(scheduling) {
-        case ROUND_ROBIN: rr_fifo_init_process(start_index); break;
-        case FIFO: rr_fifo_init_process(start_index); break;
-        case MLFQ: mlfq_init_process(start_index); break;
-    }
-
+    init_process(start_index);
 
     //PCB
     strcpy(memory[mem_index].name, "Process_ID");
@@ -538,7 +529,7 @@ int create_process(const char *program, int priority) {
     mem_index++;
     
     strcpy(memory[mem_index].name, "Priority");
-    sprintf(memory[mem_index].value, "%d", priority);
+    sprintf(memory[mem_index].value, "%d", 1);
     memory[mem_index].process_id = pid;
     memory[mem_index].type = T_PCB;
     mem_index++;
@@ -649,7 +640,9 @@ void print_process_stats() {
 void init() {
     init_mutex();
     init_memory();
-    init_queue(&ready_queue);
+    for (int i = 0; i < 3; i++) {
+        init_queue(&ready_queue[i]);
+    }
 }
 
 int main(void) {
@@ -659,7 +652,7 @@ int main(void) {
     printf("[Clock: %d] System initialized\n", system_clock);
     print_memory();
     
-    int pid1 = create_process("Program_1.txt", 0);
+    int pid1 = create_process("Program_1.txt");
     print_memory();
     if (pid1 > 0) {
         print_process_stats();
@@ -682,8 +675,11 @@ int main(void) {
     
     
     print_memory();
-    while (current_process.process_id != -1 || ready_queue.size > 0) {
+    while (1) {
         run_clock_cycle();
+        if (current_process.process_id == -1) {
+            break;
+        }
     }
     printf("[Clock: %d] All processes completed\n", system_clock);
     print_process_stats();
