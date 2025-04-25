@@ -6,7 +6,7 @@
 //#include <stdbool.h>  // Added for bool type
 //#include "uthash.h"// didnt work at all sad
 
-
+//#define TEST_MODE 0
 #define MAX_LINE_LENGTH 1024
 #define MAX_VARS_PER 3  // look i am not sure here but it isnt i wish we used c++
 #define MAX_NAME_LENGTH 50
@@ -15,6 +15,7 @@
 #define MAX_PROCESSES 6 // only three i think for now
 #define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
 #define READY_QUEUE_SIZE 4 // max amount of ready queues
+#define MAX_MUTEXES 3 //max amount of mutexes
 #define MAX_FILE_BUFFER 10000
 #define ROUND_ROBIN 1
 #define FIFO 2
@@ -23,6 +24,12 @@
 // Added global clock
 int scheduling = ROUND_ROBIN;
 int system_clock = 1;
+
+
+typedef struct {
+    char name[MAX_NAME_LENGTH];
+    int value;  
+}mutex;
 
 // Process states
 typedef enum {
@@ -79,6 +86,8 @@ typedef struct {
 } queue;
 
 int create_process(const char *program);
+PCB load_PCB(int address);
+char *process_read_file(const char *path);
 
 void init_queue(queue* q) {
     q->tail = NULL;
@@ -124,28 +133,123 @@ int peek(queue* q) {
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
-
 int MY_clock = 0;
-MemoryWord memory[MEMORY_SIZE];
+int is_current_process_blocked = 0;
 int programs_size = 4;
-program programs[MAX_PROCESSES];
+int process_count = 0;
 int total_programs = 0;
 int program_index = 0;
 int memory_allocated = 0;
-queue ready_queue[4];
+queue ready_queue[READY_QUEUE_SIZE];
+queue blocked_queue[MAX_MUTEXES];
+program programs[MAX_PROCESSES];
+MemoryWord memory[MEMORY_SIZE];
+mutex mutexes[MAX_MUTEXES];
 PCB current_process = {-1};
-int process_count = 0;
+
 
 //sem 
 
 void init_mutex() {
-    
+    strcpy(mutexes[0].name,"userInput");
+    strcpy(mutexes[1].name,"file");
+    strcpy(mutexes[2].name,"userOutput");
+    for(int i = 0; i < MAX_MUTEXES; i++) {
+        mutexes[i].value = 1;
+    }
 }
 
 int find_mutex(const char *name) {
-    return 0;
+    for (int i = 0; i < MAX_MUTEXES; i++) {
+        if (strcmp(mutexes[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
-char *process_read_file(const char *path);
+void block_process(int mutex_index){
+    if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
+        fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
+        return;
+    }
+    if (current_process.process_id != -1) {
+        int offset = current_process.lower_bound;
+        strcpy(memory[offset + 1].value, "BLOCKED");
+        printf("changed address %d to BLOCKED\n", offset + 1);
+        push(&blocked_queue[mutex_index], current_process.lower_bound);
+        is_current_process_blocked = 1;
+    
+    #ifdef TEST_MODE
+        printf("\n------ BLOCKED QUEUES [Clock: %d] ------\n", system_clock);
+        for (int i = 0; i < MAX_MUTEXES; i++) {
+            printf("Mutex: %s | Blocked Processes: ", mutexes[i].name);
+            if (blocked_queue[i].size == 0) {
+                 printf("None\n");
+            }else {
+            node* current = blocked_queue[i].tail->next;
+            for (int j = 0; j < blocked_queue[i].size; j++) {
+                PCB process = load_PCB(current->value);
+                printf("%d ", process.process_id);
+                current = current->next;
+            }
+            printf("\n");
+            }
+        }
+        printf("---------------------------------------\n");
+    #endif
+   }
+}
+void unblock_process(int mutex_index) {
+    if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
+        fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
+        return;
+    }
+    if (blocked_queue[mutex_index].size > 0) {
+        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, mutexes[mutex_index].name);
+        PCB unblocked_process = load_PCB(pop(&blocked_queue[mutex_index]));
+        int offset = unblocked_process.lower_bound;
+        strcpy(memory[offset + 1].value, "READY");
+        printf("changed address %d to READY\n", offset + 1);
+        push(&ready_queue[0], current_process.lower_bound);
+    } 
+}
+
+void sem_wait_resource(char *name) {
+    trim(name);
+    int idx = find_mutex(name);
+    if (idx < 0) {
+        fprintf(stderr, "[Clock: %d] sem_wait_resource: unknown mutex \"%s\"\n", system_clock, name);
+        return;
+    }
+    mutexes[idx].value--;
+    if (mutexes[idx].value < 0) {
+        printf("[Clock: %d] Process %d: sem_wait_resource blocked %s \n", system_clock, current_process.process_id, name);
+        block_process(idx);
+        
+    } else {
+        printf("[Clock: %d] Process %d: sem_wait_resource acquired %s \n", system_clock, current_process.process_id, name);
+    }
+
+    printf("[Clock: %d] Process %d: sem_wait_resource end %s \n", system_clock, current_process.process_id, name);
+}
+
+void sem_signal_resource(char *name) {    
+    trim(name);
+    int idx = find_mutex(name);
+    if (idx < 0) {
+        fprintf(stderr, "[Clock: %d] sem_signal_resource: unknown mutex \"%s\"\n", system_clock, name);
+        return;
+    }
+    mutexes[idx].value++;
+    if (mutexes[idx].value <= 0) {
+        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, name);
+        unblock_process(idx);
+    } else {
+        printf("[Clock: %d] Process %d: sem_signal_resource released %s \n", system_clock, current_process.process_id, name);
+    }
+    printf("[Clock: %d] Process %d: sem_signal_resource end %s \n", system_clock, current_process.process_id, name);
+}
+
 
 //variable
 
@@ -342,30 +446,13 @@ void process_print_from_to(char* args){
     printf("\n");
 }
 
-void sem_wait_resource(char *name) {
-    trim(name);
-    int idx = find_mutex(name);
-    if (idx < 0) {
-        fprintf(stderr, "[Clock: %d] sem_wait_resource: unknown mutex \"%s\"\n", system_clock, name);
-        return;
-    }
-    printf("[Clock: %d] Process %d: sem_wait_resource end %s \n", system_clock, current_process.process_id, name);
-}
-
-void sem_signal_resource(char *name) {    
-    trim(name);
-    int idx = find_mutex(name);
-    if (idx < 0) {
-        fprintf(stderr, "[Clock: %d] sem_signal_resource: unknown mutex \"%s\"\n", system_clock, name);
-        return;
-    }
-    printf("[Clock: %d] Process %d: sem_signal_resource end %s \n", system_clock, current_process.process_id, name);
-}
-
 void execute_line(char *line) {
     if (line[0] == '\0') {
         return;
     }
+    #ifdef TEST_MODE
+        printf("[Clock: %d] Process %d: Executing line at address %d: %s\n", system_clock, current_process.process_id,current_process.program_counter ,line);
+    #endif
     
     // Extract command and arguments doesn't need max length
     char *command = strtok(line, " ");
@@ -446,7 +533,7 @@ void switch_context(queue* src, queue* dest) {
         if (current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB) {
             strcpy(memory[offset + 1].value, "TERMINATED");
             current_process.process_id = -1;
-        } else {
+        } else if (!is_current_process_blocked) {
             strcpy(memory[offset + 1].value, "READY");
             push(dest, current_process.lower_bound);
         }
@@ -467,15 +554,36 @@ queue* find_src(int priority) {
     return &ready_queue[0];
 }
 
+void print_memory() {
+    printf("\n------ MEMORY CONTENTS [Clock: %d] ------\n", system_clock);
+    for (int i = 0; i < MEMORY_SIZE; i++) {
+        if (memory[i].process_id != -1) {
+            printf("[%2d] Process %d | ", i, memory[i].process_id);
+            
+            if (memory[i].type == T_PCB)
+                printf("PCB | ");
+            else if (memory[i].type == CODE)
+                printf("CODE | ");
+            else if (memory[i].type == VAR)
+                printf("VAR | ");
+            
+            printf("%s: %s\n", memory[i].name, memory[i].value);
+        } else {
+            printf("[%2d] Empty\n", i);
+        }
+    }
+    printf("----------------------------\n\n");
+}
+
 void schedule() {
     char program_done = current_process.process_id == -1 || current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     switch(scheduling) {
         case ROUND_ROBIN:
-            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done) {
+            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
                 quantum_tracking = 0;
             }
-            if (quantum_tracking == round_robin_quantum || program_done) {
+            if (quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
             break;
@@ -484,7 +592,7 @@ void schedule() {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
-        case MLFQ:
+        case MLFQ://mutex won't work till now with mlfq cuz it reinserts the process in readyqueue[0]
             int mlfq_quantum = 1 << (current_process.priority);
             if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
@@ -502,6 +610,7 @@ void schedule() {
             }
             break;
     }
+    is_current_process_blocked = 0;
 }
 
 void check_for_processes() {
@@ -520,6 +629,9 @@ void run_clock_cycle() {
         system_clock++;
         return;
     }
+    #ifdef TEST_MODE
+      print_memory();
+    #endif
     execute_line(memory[current_process.program_counter].value);
     quantum_tracking++;
     system_clock++;
@@ -627,32 +739,16 @@ int create_process(const char *program) {
     return pid;
 }
 
-void print_memory() {
-    printf("\n------ MEMORY CONTENTS [Clock: %d] ------\n", system_clock);
-    for (int i = 0; i < MEMORY_SIZE; i++) {
-        if (memory[i].process_id != -1) {
-            printf("[%2d] Process %d | ", i, memory[i].process_id);
-            
-            if (memory[i].type == T_PCB)
-                printf("PCB | ");
-            else if (memory[i].type == CODE)
-                printf("CODE | ");
-            else if (memory[i].type == VAR)
-                printf("VAR | ");
-            
-            printf("%s: %s\n", memory[i].name, memory[i].value);
-        } else {
-            printf("[%2d] Empty\n", i);
-        }
-    }
-    printf("----------------------------\n\n");
-}
+
 
 void init() {
     init_mutex();
     init_memory();
     for (int i = 0; i < READY_QUEUE_SIZE; i++) {
         init_queue(&ready_queue[i]);
+    }
+    for (int i = 0; i < MAX_MUTEXES; i++) {
+        init_queue(&blocked_queue[i]);
     }
 }
 
@@ -683,7 +779,10 @@ int main(void) {
         total_programs++;
     }
 
+    
+
     qsort(programs, total_programs, sizeof(program), compare);
+    print_memory();
     while (1) {
         run_clock_cycle();
         if (current_process.process_id == -1 && program_index == total_programs) {
