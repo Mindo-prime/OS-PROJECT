@@ -504,7 +504,7 @@ void schedule() {
 }
 
 void check_for_processes() {
-    if (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
+    while (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
         printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
         create_process(programs[program_index++].name);
     }
