@@ -14,6 +14,7 @@
 #define MEMORY_SIZE 60 // Because we need 60 words bruh 
 #define MAX_PROCESSES 6 // only three i think for now
 #define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
+#define READY_QUEUE_SIZE 4 // max amount of ready queues
 #define MAX_FILE_BUFFER 10000
 #define ROUND_ROBIN 1
 #define FIFO 2
@@ -650,7 +651,7 @@ void print_memory() {
 void init() {
     init_mutex();
     init_memory();
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < READY_QUEUE_SIZE; i++) {
         init_queue(&ready_queue[i]);
     }
 }
