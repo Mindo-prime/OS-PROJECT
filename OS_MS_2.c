@@ -442,7 +442,7 @@ void init_process(int address) {
 void switch_context(queue* src, queue* dest) {
     int offset = current_process.lower_bound;
     if (current_process.process_id != -1) {
-        if (current_process.program_counter == current_process.code_size) {
+        if (current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB) {
             strcpy(memory[offset + 1].value, "TERMINATED");
             current_process.process_id = -1;
         } else {
@@ -467,7 +467,7 @@ queue* find_src(int priority) {
 }
 
 void schedule() {
-    char program_done = current_process.program_counter == current_process.code_size;
+    char program_done = current_process.process_id == -1 || current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     switch(scheduling) {
         case ROUND_ROBIN:
             if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done) {
@@ -479,7 +479,7 @@ void schedule() {
             }
             break;
         case FIFO:
-            if (current_process.program_counter  == current_process.code_size) {
+            if (program_done) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
@@ -490,7 +490,7 @@ void schedule() {
                 int offset = current_process.lower_bound;
                 sprintf(memory[offset + 2].value, "%d", current_process.priority);
             }
-            int src_priority = current_process.program_counter == current_process.code_size ? 3 : current_process.priority;
+            int src_priority = program_done ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
             if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done) {
@@ -504,7 +504,7 @@ void schedule() {
 }
 
 void check_for_processes() {
-    while (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
+    if (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
         printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
         create_process(programs[program_index++].name);
     }
@@ -519,12 +519,11 @@ void run_clock_cycle() {
         system_clock++;
         return;
     }
-    int offset = NUM_PCB + current_process.lower_bound;
-    execute_line(memory[current_process.program_counter + offset].value);
+    execute_line(memory[current_process.program_counter].value);
     quantum_tracking++;
     system_clock++;
     current_process.program_counter++;
-    offset = current_process.lower_bound;
+    int offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
 }
 
@@ -554,6 +553,8 @@ int create_process(const char *program) {
         fclose(fptr);
         return -1;
     }
+    // printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
+    //        system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
     
     int pid = process_count + 1;
     int start_index = memory_allocated;
@@ -581,7 +582,7 @@ int create_process(const char *program) {
     mem_index++;
     
     strcpy(memory[mem_index].name, "PC");
-    strcpy(memory[mem_index].value, "0");
+    sprintf(memory[mem_index].value, "%d", start_index + NUM_PCB);
     memory[mem_index].process_id = pid;
     memory[mem_index].type = T_PCB;
     mem_index++;
@@ -671,7 +672,7 @@ int main(void) {
         if (!fgets(buffer, MAX_NAME_LENGTH, stdin)) break;
         buffer[strcspn(buffer, "\n")] = '\0';
         if (strcmp(buffer, "done") == 0) break;
-        programs[total_programs].name = malloc(strlen(buffer));
+        programs[total_programs].name =  (char*) malloc(strlen(buffer));
         strcpy(programs[total_programs].name, buffer);
 
         printf("Enter arrival time: ");
