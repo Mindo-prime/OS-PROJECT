@@ -586,7 +586,7 @@ void schedule() {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
-        case MLFQ://mutex won't work till now with mlfq cuz it reinserts the process in readyqueue[0]
+        case MLFQ:{//mutex won't work till now with mlfq cuz it reinserts the process in readyqueue[0]
             int mlfq_quantum = 1 << (current_process.priority);
             if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
@@ -602,7 +602,7 @@ void schedule() {
             if (quantum_tracking == mlfq_quantum || program_done) {
                 quantum_tracking = 0;
             }
-            break;
+            break;}
     }
     is_current_process_blocked = 0;
 }
