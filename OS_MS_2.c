@@ -88,6 +88,8 @@ typedef struct {
 int create_process(const char *program);
 PCB load_PCB(int address);
 char *process_read_file(const char *path);
+void trim(char *str);
+void print_memory();
 
 void init_queue(queue* q) {
     q->tail = NULL;
@@ -175,28 +177,10 @@ void block_process(int mutex_index){
     if (current_process.process_id != -1) {
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
-        printf("changed address %d to BLOCKED\n", offset + 1);
+        //printf("changed address %d to BLOCKED\n", offset + 1);
         push(&blocked_queue[mutex_index], current_process.lower_bound);
         is_current_process_blocked = 1;
-    
-    #ifdef TEST_MODE
-        printf("\n------ BLOCKED QUEUES [Clock: %d] ------\n", system_clock);
-        for (int i = 0; i < MAX_MUTEXES; i++) {
-            printf("Mutex: %s | Blocked Processes: ", mutexes[i].name);
-            if (blocked_queue[i].size == 0) {
-                 printf("None\n");
-            }else {
-            node* current = blocked_queue[i].tail->next;
-            for (int j = 0; j < blocked_queue[i].size; j++) {
-                PCB process = load_PCB(current->value);
-                printf("%d ", process.process_id);
-                current = current->next;
-            }
-            printf("\n");
-            }
-        }
-        printf("---------------------------------------\n");
-    #endif
+
    }
 }
 void unblock_process(int mutex_index) {
@@ -209,28 +193,31 @@ void unblock_process(int mutex_index) {
         PCB unblocked_process = load_PCB(pop(&blocked_queue[mutex_index]));
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
-        printf("changed address %d to READY\n", offset + 1);
-        push(&ready_queue[0], current_process.lower_bound);
+        //printf("changed address %d to READY\n", offset + 1);
+        push(&ready_queue[0], unblocked_process.lower_bound);
     } 
 }
 
 void sem_wait_resource(char *name) {
+    
     trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
         fprintf(stderr, "[Clock: %d] sem_wait_resource: unknown mutex \"%s\"\n", system_clock, name);
         return;
     }
-    mutexes[idx].value--;
-    if (mutexes[idx].value < 0) {
+    
+     if (mutexes[idx].value < 0) {
         printf("[Clock: %d] Process %d: sem_wait_resource blocked %s \n", system_clock, current_process.process_id, name);
         block_process(idx);
-        
+        current_process.program_counter--;
+        sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
     } else {
+        mutexes[idx].value=-1;
         printf("[Clock: %d] Process %d: sem_wait_resource acquired %s \n", system_clock, current_process.process_id, name);
+        //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
-
-    printf("[Clock: %d] Process %d: sem_wait_resource end %s \n", system_clock, current_process.process_id, name);
+    
 }
 
 void sem_signal_resource(char *name) {    
@@ -240,14 +227,15 @@ void sem_signal_resource(char *name) {
         fprintf(stderr, "[Clock: %d] sem_signal_resource: unknown mutex \"%s\"\n", system_clock, name);
         return;
     }
-    mutexes[idx].value++;
+   
     if (mutexes[idx].value <= 0) {
-        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, name);
         unblock_process(idx);
-    } else {
-        printf("[Clock: %d] Process %d: sem_signal_resource released %s \n", system_clock, current_process.process_id, name);
+        mutexes[idx].value=1;
+        //printf("[Clock: %d] Process %d: sem_signal_resource released %s \n", system_clock, current_process.process_id, name);
+        //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
-    printf("[Clock: %d] Process %d: sem_signal_resource end %s \n", system_clock, current_process.process_id, name);
+    
+   
 }
 
 
@@ -447,17 +435,18 @@ void process_print_from_to(char* args){
 }
 
 void execute_line(char *line) {
-    if (line[0] == '\0') {
+    char* goddamn_copy_because_someone_chatgpt_his_way =  malloc(strlen(line) + 1);
+    strcpy(goddamn_copy_because_someone_chatgpt_his_way, line);
+    if (goddamn_copy_because_someone_chatgpt_his_way==NULL || goddamn_copy_because_someone_chatgpt_his_way[0] == '\0') {
         return;
     }
     #ifdef TEST_MODE
         printf("[Clock: %d] Process %d: Executing line at address %d: %s\n", system_clock, current_process.process_id,current_process.program_counter ,line);
     #endif
-    
+   
     // Extract command and arguments doesn't need max length
-    char *command = strtok(line, " ");
+    char *command = strtok(goddamn_copy_because_someone_chatgpt_his_way, " ");
     char *args = strtok(NULL, "");
-
     static char empty_string[] = ""; 
     if (!args) args = empty_string;
     
@@ -478,8 +467,7 @@ void execute_line(char *line) {
     } else {
         fprintf(stderr, "[Clock: %d] Process %d: Error: Unknown command '%s'\n", system_clock, current_process.process_id, command);
     }
-    
-    // Update program counter in the PCB
+   free(goddamn_copy_because_someone_chatgpt_his_way);
 }
 
 // Initialize memory
@@ -528,7 +516,11 @@ void init_process(int address) {
 }
 
 void switch_context(queue* src, queue* dest) {
-    int offset = current_process.lower_bound;
+   #ifdef TEST_MODE
+     printf("--------switching context--------\n");
+    #endif
+     int offset = current_process.lower_bound;
+    
     if (current_process.process_id != -1) {
         if (current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB) {
             strcpy(memory[offset + 1].value, "TERMINATED");
@@ -543,6 +535,9 @@ void switch_context(queue* src, queue* dest) {
         offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "RUNNING");
     }
+    
+    
+    
 }
 
 queue* find_src(int priority) {
@@ -581,7 +576,6 @@ void schedule() {
         case ROUND_ROBIN:
             if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
-                quantum_tracking = 0;
             }
             if (quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
                 quantum_tracking = 0;
@@ -623,21 +617,47 @@ void check_for_processes() {
 void run_clock_cycle() {
     // check if new process is to be created
     check_for_processes();
+    
     schedule();
+   
     if (current_process.process_id == -1) {
         printf("[Clock: %d] Idle\n", system_clock);
         system_clock++;
         return;
     }
-    #ifdef TEST_MODE
-      print_memory();
-    #endif
-    execute_line(memory[current_process.program_counter].value);
-    quantum_tracking++;
-    system_clock++;
+   
+    execute_line(memory[current_process.program_counter].value); 
+   
     current_process.program_counter++;
     int offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
+    #ifdef TEST_MODE
+        printf("------------TestMode Statistics----------------\n");
+        print_memory();
+/*
+        printf("\n------ BLOCKED QUEUES [Clock: %d] ------\n", system_clock);
+        for (int i = 0; i < MAX_MUTEXES; i++) {
+            printf("Mutex: %s | Blocked Processes: ", mutexes[i].name);
+            if (blocked_queue[i].size == 0) {
+                 printf("None\n");
+            }else {
+            node* current = blocked_queue[i].tail->next;
+            for (int j = 0; j < blocked_queue[i].size; j++) {
+                PCB process = load_PCB(current->value);
+                printf("%d ", process.process_id);
+                current = current->next;
+            }
+            printf("\n");
+            }
+        }
+        printf("---------------------------------------\n");
+        
+        printf("\nquantum tracking: %d",quantum_tracking);*/
+        printf("\n-------------END TESTMode print ----------------\n");
+    #endif
+    //these need to be at the end of this method
+    quantum_tracking++;
+    system_clock++;
 }
 
 int create_process(const char *program) {
@@ -788,6 +808,7 @@ int main(void) {
         if (current_process.process_id == -1 && program_index == total_programs) {
             break;
         }
+        if (system_clock>16)break;
     }
     
     printf("[Clock: %d] All processes completed\n", system_clock);
