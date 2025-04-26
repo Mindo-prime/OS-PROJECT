@@ -84,6 +84,10 @@ struct PqNode {
     int priority;
     struct PqNode* next;
 };
+typedef struct {
+    struct PqNode* head;
+    int size;
+}  PriorityQueue;
 
 typedef struct {
     node* tail;
@@ -228,7 +232,7 @@ int total_programs = 0;
 int program_index = 0;
 int memory_allocated = 0;
 queue ready_queue[READY_QUEUE_SIZE];
-queue blocked_queue[MAX_MUTEXES];
+PriorityQueue blocked_queue[MAX_MUTEXES];
 program programs[MAX_PROCESSES];
 MemoryWord memory[MEMORY_SIZE];
 mutex mutexes[MAX_MUTEXES];
@@ -263,7 +267,7 @@ void block_process(int mutex_index){
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
         //printf("changed address %d to BLOCKED\n", offset + 1);
-        push(&blocked_queue[mutex_index], current_process.lower_bound);
+       // enqueue(,current_process.lower_bound, current_process.priority);
         is_current_process_blocked = 1;
 
    }
@@ -275,11 +279,11 @@ void unblock_process(int mutex_index) {
     }
     if (blocked_queue[mutex_index].size > 0) {
         printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, mutexes[mutex_index].name);
-        PCB unblocked_process = load_PCB(pop(&blocked_queue[mutex_index]));
+        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
-        push(&ready_queue[0], unblocked_process.lower_bound);
+        push(&ready_queue[unblocked_process.priority], unblocked_process.lower_bound);
     } 
 }
 
@@ -852,9 +856,7 @@ void init() {
     for (int i = 0; i < READY_QUEUE_SIZE; i++) {
         init_queue(&ready_queue[i]);
     }
-    for (int i = 0; i < MAX_MUTEXES; i++) {
-        init_queue(&blocked_queue[i]);
-    }
+
 }
 
 int compare(const void *a, const void *b) {
