@@ -187,7 +187,12 @@ void init_queue(queue* q) {
 
 void push(queue* q, int value) {
     node* new_node = (node*) malloc(sizeof(node));
-    new_node->value = value;
+if (new_node == NULL) {
+    fprintf(stderr, "Memory allocation failed\n");
+    exit(EXIT_FAILURE);
+}
+new_node->value = value;
+
     if (q->tail == NULL) {
         q->tail = new_node;
         q->tail->next = new_node;
@@ -260,12 +265,13 @@ int find_mutex(const char *name) {
 }
 void block_process(int mutex_index){
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
-        fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
+        fprintf(stderr, "[Clock: %d] block_process: invalid mutex index %d\n", system_clock, mutex_index);
         return;
     }
     if (current_process.process_id != -1) {
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
+        current_process.state = BLOCKED;
         enqueue(&blocked_queue[mutex_index].head, current_process.lower_bound, current_process.priority);
         blocked_queue[mutex_index].size++;
         is_current_process_blocked = 1;
@@ -278,7 +284,7 @@ void unblock_process(int mutex_index) {
         return;
     }
     if (blocked_queue[mutex_index].size > 0) {
-        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, mutexes[mutex_index].name);
+        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index].head));
         blocked_queue[mutex_index].size--;
         int offset = unblocked_process.lower_bound;
