@@ -808,7 +808,6 @@ int main(void) {
         if (current_process.process_id == -1 && program_index == total_programs) {
             break;
         }
-        if (system_clock>16)break;
     }
     
     printf("[Clock: %d] All processes completed\n", system_clock);
