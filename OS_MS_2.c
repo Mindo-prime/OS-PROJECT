@@ -266,8 +266,8 @@ void block_process(int mutex_index){
     if (current_process.process_id != -1) {
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
-        //printf("changed address %d to BLOCKED\n", offset + 1);
-       // enqueue(,current_process.lower_bound, current_process.priority);
+        enqueue(&blocked_queue[mutex_index].head, current_process.lower_bound, current_process.priority);
+        blocked_queue[mutex_index].size++;
         is_current_process_blocked = 1;
 
    }
@@ -279,7 +279,8 @@ void unblock_process(int mutex_index) {
     }
     if (blocked_queue[mutex_index].size > 0) {
         printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, current_process.process_id, mutexes[mutex_index].name);
-        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
+        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index].head));
+        blocked_queue[mutex_index].size--;
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
