@@ -854,11 +854,23 @@ int create_process(const char *program) {
 void init() {
     init_mutex();
     init_memory();
+    init_queues();
+}
+
+
+
+void init_queues() {
     for (int i = 0; i < READY_QUEUE_SIZE; i++) {
         init_queue(&ready_queue[i]);
     }
+    
 
+    for (int i = 0; i < MAX_MUTEXES; i++) {
+        blocked_queue[i].head = NULL;
+        blocked_queue[i].size = 0;
+    }
 }
+
 
 int compare(const void *a, const void *b) {
     return ((program *)a)->arrival_time - ((program *)b)->arrival_time;
