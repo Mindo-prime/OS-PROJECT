@@ -267,6 +267,14 @@ int find_mutex(const char *name) {
     }
     return -1;
 }
+int get_enqueue_priority(int priority) {
+    if (scheduling == ROUND_ROBIN || scheduling == FIFO) {
+        return 0;
+    }else if (scheduling == MLFQ) {
+        return priority;
+    }
+    return priority;
+}
 void block_process(int mutex_index){
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
         fprintf(stderr, "[Clock: %d] block_process: invalid mutex index %d\n", system_clock, mutex_index);
@@ -276,7 +284,8 @@ void block_process(int mutex_index){
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
         current_process.state = BLOCKED;
-        enqueue(&blocked_queue[mutex_index], current_process.lower_bound, current_process.priority);
+        int enqueue_priority = get_enqueue_priority(current_process.priority);
+        enqueue(&blocked_queue[mutex_index], current_process.lower_bound, enqueue_priority);
         is_current_process_blocked = 1;
 
    }
@@ -287,9 +296,8 @@ void unblock_process(int mutex_index) {
         return;
     }
     if (blocked_queue[mutex_index].size > 0) {
-        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
-        blocked_queue[mutex_index].size--;
+        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
