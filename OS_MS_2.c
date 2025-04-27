@@ -120,7 +120,8 @@ int isEmpty(struct PqNode* head) {
 }
 
 
-void enqueue(struct PqNode** head, int data, int priority) {
+void enqueue(PriorityQueue* pq, int data, int priority) {
+    struct PqNode** head = &pq->head;
     struct PqNode* newPqNode = createPqNode(data, priority);
     
     if (*head == NULL) {
@@ -136,10 +137,12 @@ void enqueue(struct PqNode** head, int data, int priority) {
         newPqNode->next = current->next;
         current->next = newPqNode;
     }
+    pq->size++;
 }
 
 
-int dequeue(struct PqNode** head) {
+int dequeue(PriorityQueue* pq) {
+    struct PqNode** head = &pq->head;
     if (isEmpty(*head)) {
         printf("Queue is empty\n");
         return -1;
@@ -149,6 +152,7 @@ int dequeue(struct PqNode** head) {
     int data = temp->data;
     *head = (*head)->next;
     free(temp);
+    pq->size--;
     return data;
 }
 
@@ -272,8 +276,7 @@ void block_process(int mutex_index){
         int offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "BLOCKED");
         current_process.state = BLOCKED;
-        enqueue(&blocked_queue[mutex_index].head, current_process.lower_bound, current_process.priority);
-        blocked_queue[mutex_index].size++;
+        enqueue(&blocked_queue[mutex_index], current_process.lower_bound, current_process.priority);
         is_current_process_blocked = 1;
 
    }
@@ -285,7 +288,7 @@ void unblock_process(int mutex_index) {
     }
     if (blocked_queue[mutex_index].size > 0) {
         printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
-        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index].head));
+        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
         blocked_queue[mutex_index].size--;
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
