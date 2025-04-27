@@ -703,10 +703,10 @@ void schedule() {
             int src_priority = program_done ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
-            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done) {
+            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
                 switch_context(src, dest);
             }
-            if (quantum_tracking == mlfq_quantum || program_done) {
+            if (quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
             break;}
