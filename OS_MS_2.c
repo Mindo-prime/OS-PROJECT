@@ -868,11 +868,6 @@ int create_process(const char *program) {
 
 
 
-void init() {
-    init_mutex();
-    init_memory();
-    init_queues();
-}
 
 
 
@@ -886,6 +881,11 @@ void init_queues() {
         blocked_queue[i].head = NULL;
         blocked_queue[i].size = 0;
     }
+}
+void init() {
+    init_mutex();
+    init_memory();
+    init_queues();
 }
 
 
