@@ -22,10 +22,6 @@
 #define FIFO 2
 #define MLFQ 3
 
-// Added global clock
-int scheduling = ROUND_ROBIN;
-int system_clock = 1;
-
 
 typedef struct {
     char name[MAX_NAME_LENGTH];
@@ -76,7 +72,8 @@ typedef struct  {
     int arrival_time;
 } program;
 
-
+int scheduling = ROUND_ROBIN;
+int system_clock = 1;
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
 int MY_clock = 0;
