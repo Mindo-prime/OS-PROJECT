@@ -693,7 +693,7 @@ void schedule() {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
-        case MLFQ:{//mutex won't work till now with mlfq cuz it reinserts the process in readyqueue[0]
+        case MLFQ:{
             int mlfq_quantum = 1 << (current_process.priority);
             if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
@@ -906,6 +906,13 @@ int main(void) {
         if (!fgets(buffer, MAX_NAME_LENGTH, stdin)) break;
         buffer[strcspn(buffer, "\n")] = '\0';
         if (strcmp(buffer, "done") == 0) break;
+        if (strcmp(buffer,"p1") == 0){
+           strcpy(buffer,"Program_1.txt");
+        }else if (strcmp(buffer,"p2") == 0){
+           strcpy(buffer,"Program_2.txt");
+        }else if (strcmp(buffer,"p3") == 0){
+           strcpy(buffer,"Program_3.txt");
+        }
         programs[total_programs].name =  (char*) malloc(strlen(buffer));
         strcpy(programs[total_programs].name, buffer);
 
