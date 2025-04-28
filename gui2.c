@@ -451,7 +451,7 @@ void process_print_from_to(char* args){
         printf("%i\n", i);
         console_printf("%i, ",i);
     }
-    console_printf("\n")
+    console_printf("\n");
     printf("\n");
 }
 
@@ -781,11 +781,6 @@ int create_process(const char *program) {
     return pid;
 }
 
-
-
-
-
-
 void init_queues() {
     for (int i = 0; i < READY_QUEUE_SIZE; i++) {
         init_queue(&ready_queue[i]);
@@ -793,10 +788,10 @@ void init_queues() {
     
 
     for (int i = 0; i < MAX_MUTEXES; i++) {
-        blocked_queue[i].head = NULL;
-        blocked_queue[i].size = 0;
+        createPriorityQueue(MAX_PROCESSES); 
     }
 }
+
 void init() {
     init_mutex();
     init_memory();
@@ -1227,18 +1222,15 @@ void update_queue_lists() {
     
     // Add items from all blocked queues
     for (int m = 0; m < MAX_MUTEXES; m++) {
-        struct PqNode* current = blocked_queue[m].head;
-        while (current != NULL) {
-            PCB process = load_PCB(current->data);
+        for (int i = 1; i <= blocked_queue[m].size; i++) {
+            PCB process = load_PCB(blocked_queue[m].array[i].data);
             
             gtk_list_store_append(blocked_queue_store, &iter);
             gtk_list_store_set(blocked_queue_store, &iter,
-                             0, process.process_id,  // Process ID
-                             1, mutexes[m].name,  // Resource name
-                             2, current->priority,  // Priority
+                             0, process.process_id,    // Process ID
+                             1, mutexes[m].name,       // Resource name
+                             2, blocked_queue[m].array[i].priority,  // Priority
                              -1);
-            
-            current = current->next;
         }
     }
 }
