@@ -652,27 +652,9 @@ void run_clock_cycle() {
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
     #ifdef TEST_MODE
         printf("------------TestMode Statistics----------------\n");
-        print_memory();
-/*
-        printf("\n------ BLOCKED QUEUES [Clock: %d] ------\n", system_clock);
-        for (int i = 0; i < MAX_MUTEXES; i++) {
-            printf("Mutex: %s | Blocked Processes: ", mutexes[i].name);
-            if (blocked_queue[i].size == 0) {
-                 printf("None\n");
-            }else {
-            node* current = blocked_queue[i].tail->next;
-            for (int j = 0; j < blocked_queue[i].size; j++) {
-                PCB process = load_PCB(current->value);
-                printf("%d ", process.process_id);
-                current = current->next;
-            }
-            printf("\n");
-            }
-        }
-        printf("---------------------------------------\n");
-        
-        printf("\nquantum tracking: %d",quantum_tracking);*/
-        printf("\n-------------END TESTMode print ----------------\n");
+        print_memory();     
+        printf("\nquantum tracking: %d\n",quantum_tracking);
+        printf("-------------END TESTMode print ----------------\n");
     #endif
     //these need to be at the end of this method
     quantum_tracking++;
@@ -703,8 +685,7 @@ void init_queues() {
     
 
     for (int i = 0; i < MAX_MUTEXES; i++) {
-        blocked_queue[i].head = NULL;
-        blocked_queue[i].size = 0;
+        createPriorityQueue(MAX_PROCESSES); 
     }
 }
 void init() {

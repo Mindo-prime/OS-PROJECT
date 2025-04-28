@@ -6,17 +6,19 @@
 struct PqNode {
     int data;
     int priority;
-    struct PqNode* next;
 };
 typedef struct {
-    struct PqNode* head;
     int size;
+    int capacity;
+    struct PqNode* array;
 }  PriorityQueue;
 
 void enqueue(PriorityQueue* pq, int data, int priority);
 int dequeue(PriorityQueue* pq);
-void displayPQ(struct PqNode* head);
-int isEmpty(struct PqNode* head);
+int peekPQ(PriorityQueue* pq);
+int isEmpty(PriorityQueue* pq);
+void freePQ(PriorityQueue* pq);
 struct PqNode* createPqNode(int data, int priority);
+PriorityQueue* createPriorityQueue(int capacity);
 
 #endif
