@@ -3,6 +3,7 @@
 #include <stdlib.h>   
 #include <math.h>
 #include <ctype.h> 
+#include "queue.h"
 //#include <stdbool.h>  // Added for bool type
 //#include "uthash.h"// didnt work at all sad
 
@@ -75,10 +76,7 @@ typedef struct  {
     int arrival_time;
 } program;
 
-typedef struct node {
-    int value;
-    struct node* next;
-} node;
+
 struct PqNode {
     int data;
     int priority;
@@ -89,10 +87,7 @@ typedef struct {
     int size;
 }  PriorityQueue;
 
-typedef struct {
-    node* tail;
-    int size;
-} queue;
+
 
 int create_process(const char *program);
 PCB load_PCB(int address);
@@ -184,52 +179,6 @@ void freeQueue(struct PqNode** head) {
 
 
 
-void init_queue(queue* q) {
-    q->tail = NULL;
-    q->size = 0;
-}
-
-void push(queue* q, int value) {
-    node* new_node = (node*) malloc(sizeof(node));
-if (new_node == NULL) {
-    fprintf(stderr, "Memory allocation failed\n");
-    exit(EXIT_FAILURE);
-}
-new_node->value = value;
-
-    if (q->tail == NULL) {
-        q->tail = new_node;
-        q->tail->next = new_node;
-    } else {
-        new_node->next = q->tail->next;
-        q->tail->next = new_node;
-        q->tail = new_node;
-    }
-    q->size++;
-}
-
-int pop(queue* q) {
-    if (q->size == 0) {
-        return -1;
-    }
-    int value = q->tail->next->value;
-    node* temp = q->tail->next;
-    if (q->size == 1) {
-        q->tail = NULL;
-    } else {
-        q->tail->next = q->tail->next->next;
-    }
-    q->size--;
-    free(temp);
-    return value;
-}
-
-int peek(queue* q) {
-    if (q->size == 0) {
-        return -1;
-    }
-    return q->tail->next->value;
-}
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
