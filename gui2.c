@@ -7,6 +7,8 @@
 #include <stdio.h>   
 #include <math.h>
 #include <ctype.h> 
+#include "queue.h"
+#include "PriorityQueue.h"
 //#include <stdbool.h>  // Added for bool type
 //#include "uthash.h"// didnt work at all sad
 
@@ -120,24 +122,6 @@ typedef struct  {
     int arrival_time;
 } program;
 
-typedef struct node {
-    int value;
-    struct node* next;
-} node;
-struct PqNode {
-    int data;
-    int priority;
-    struct PqNode* next;
-};
-typedef struct {
-    struct PqNode* head;
-    int size;
-}  PriorityQueue;
-
-typedef struct {
-    node* tail;
-    int size;
-} queue;
 
 int create_process(const char *program);
 PCB load_PCB(int address);
@@ -148,133 +132,7 @@ void print_memory();
 
 
 
-struct PqNode* createPqNode(int data, int priority) {
-    struct PqNode* newPqNode = (struct PqNode*)malloc(sizeof(struct PqNode));
-    if (newPqNode == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-    newPqNode->data = data;
-    newPqNode->priority = priority;
-    newPqNode->next = NULL;
-    return newPqNode;
-}
 
-int isEmpty(struct PqNode* head) {
-    return head == NULL;
-}
-
-
-void enqueue(PriorityQueue* pq, int data, int priority) {
-    struct PqNode** head = &pq->head;
-    struct PqNode* newPqNode = createPqNode(data, priority);
-    
-    if (*head == NULL) {
-        *head = newPqNode;
-    } else if (newPqNode->priority < (*head)->priority) {
-        newPqNode->next = *head;
-        *head = newPqNode;
-    } else {
-        struct PqNode* current = *head;
-        while (current->next != NULL && current->next->priority <= newPqNode->priority) {
-            current = current->next;
-        }
-        newPqNode->next = current->next;
-        current->next = newPqNode;
-    }
-    pq->size++;
-}
-
-
-int dequeue(PriorityQueue* pq) {
-    struct PqNode** head = &pq->head;
-    if (isEmpty(*head)) {
-        printf("Queue is empty\n");
-        return -1;
-    }
-    
-    struct PqNode* temp = *head;
-    int data = temp->data;
-    *head = (*head)->next;
-    free(temp);
-    pq->size--;
-    return data;
-}
-
-void display(struct PqNode* head) {
-    struct PqNode* current = head;
-    if (current == NULL) {
-        printf("Queue is empty\n");
-        return;
-    }
-    
-    printf("Priority Queue elements: ");
-    while (current != NULL) {
-        printf("%d (p%d) ", current->data, current->priority);
-        current = current->next;
-    }
-    printf("\n");
-}
-
-
-void freeQueue(struct PqNode** head) {
-    struct PqNode* current = *head;
-    while (current != NULL) {
-        struct PqNode* temp = current;
-        current = current->next;
-        free(temp);
-    }
-    *head = NULL;
-}
-
-
-
-void init_queue(queue* q) {
-    q->tail = NULL;
-    q->size = 0;
-}
-
-void push(queue* q, int value) {
-    node* new_node = (node*) malloc(sizeof(node));
-if (new_node == NULL) {
-    fprintf(stderr, "Memory allocation failed\n");
-    exit(EXIT_FAILURE);
-}
-new_node->value = value;
-
-    if (q->tail == NULL) {
-        q->tail = new_node;
-        q->tail->next = new_node;
-    } else {
-        new_node->next = q->tail->next;
-        q->tail->next = new_node;
-        q->tail = new_node;
-    }
-    q->size++;
-}
-
-int pop(queue* q) {
-    if (q->size == 0) {
-        return -1;
-    }
-    int value = q->tail->next->value;
-    node* temp = q->tail->next;
-    if (q->size == 1) {
-        q->tail = NULL;
-    } else {
-        q->tail->next = q->tail->next->next;
-    }
-    q->size--;
-    free(temp);
-    return value;
-}
-
-int peek(queue* q) {
-    if (q->size == 0) {
-        return -1;
-    }
-    return q->tail->next->value;
-}
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
@@ -391,7 +249,6 @@ void sem_signal_resource(char *name) {
 }
 
 
-//variable
 
 int find_variable(char *name) {
     int offset = NUM_PCB + current_process.code_size;
@@ -750,7 +607,7 @@ void schedule() {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
-        case MLFQ:{//mutex won't work till now with mlfq cuz it reinserts the process in readyqueue[0]
+        case MLFQ:{
             int mlfq_quantum = 1 << (current_process.priority);
             if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
@@ -760,16 +617,17 @@ void schedule() {
             int src_priority = program_done ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
-            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done) {
+            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
                 switch_context(src, dest);
             }
-            if (quantum_tracking == mlfq_quantum || program_done) {
+            if (quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
             break;}
     }
     is_current_process_blocked = 0;
 }
+
 
 void check_for_processes() {
     while (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
