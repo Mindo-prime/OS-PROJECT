@@ -1514,7 +1514,7 @@ void create_gui() {
         "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
         "treeview:selected { background-color: #3a3a3a; }"
         "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
-        "textview text { font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }" 
         , -1, NULL);
     
     gtk_style_context_add_provider_for_screen(
@@ -1523,7 +1523,7 @@ void create_gui() {
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
     );
     
-    // Create main grid
+    // Create main grid with expand properties
     main_grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(main_grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(main_grid), 10);
@@ -1664,7 +1664,6 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(memory_scroll), memory_list);
     gtk_container_add(GTK_CONTAINER(memory_frame), memory_scroll);
-    gtk_widget_set_size_request(memory_scroll, 500, 250);
     
     // Create process list
     GtkWidget *process_frame = gtk_frame_new("Processes");
@@ -1704,7 +1703,6 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(process_scroll), process_list);
     gtk_container_add(GTK_CONTAINER(process_frame), process_scroll);
-    gtk_widget_set_size_request(process_scroll, 500, 150);
     
     // Create queue lists
     GtkWidget *queue_frame = gtk_frame_new("Queues");
@@ -1743,8 +1741,11 @@ void create_gui() {
     gtk_tree_view_append_column(GTK_TREE_VIEW(ready_queue_list), column);
     
     gtk_container_add(GTK_CONTAINER(ready_scroll), ready_queue_list);
-    gtk_widget_set_size_request(ready_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), ready_scroll, 0, 1, 1, 1);
+    
+    // Set ready queue to expand
+    gtk_widget_set_hexpand(ready_scroll, TRUE);
+    gtk_widget_set_vexpand(ready_scroll, TRUE);
     
     // Blocked queue
     GtkWidget *blocked_label = gtk_label_new("Blocked Queue");
@@ -1775,8 +1776,11 @@ void create_gui() {
     gtk_tree_view_append_column(GTK_TREE_VIEW(blocked_queue_list), column);
     
     gtk_container_add(GTK_CONTAINER(blocked_scroll), blocked_queue_list);
-    gtk_widget_set_size_request(blocked_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), blocked_scroll, 1, 1, 1, 1);
+    
+    // Set blocked queue to expand
+    gtk_widget_set_hexpand(blocked_scroll, TRUE);
+    gtk_widget_set_vexpand(blocked_scroll, TRUE);
     
     // Create resource list
     GtkWidget *resource_frame = gtk_frame_new("Resources");
@@ -1811,7 +1815,10 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(resource_scroll), resource_list);
     gtk_container_add(GTK_CONTAINER(resource_frame), resource_scroll);
-    gtk_widget_set_size_request(resource_scroll, 500, 150);
+    
+    // Make resource list expand
+    gtk_widget_set_hexpand(resource_scroll, TRUE);
+    gtk_widget_set_vexpand(resource_scroll, TRUE);
     
     // Create console output
     GtkWidget *console_frame = gtk_frame_new("Console Output");
@@ -1847,7 +1854,10 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(console_scroll), console_text_view);
     gtk_container_add(GTK_CONTAINER(console_frame), console_scroll);
-    gtk_widget_set_size_request(console_scroll, 500, 300);
+    
+    // Make console expand
+    gtk_widget_set_hexpand(console_scroll, TRUE);
+    gtk_widget_set_vexpand(console_scroll, TRUE);
     
     // Add process icons section (Xerox Star-like)
     GtkWidget *icons_frame = gtk_frame_new("Process Icons");
@@ -1882,21 +1892,44 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), icons_frame, 0, 3, 1, 1);
     
-    // Create main notebook for switching between views
+    // Make sidebar not expand (fixed width)
+    gtk_widget_set_hexpand(sidebar, FALSE);
+    gtk_widget_set_vexpand(sidebar, TRUE);
+    
+    // Create main notebook for switching between views with expand properties
     GtkWidget *main_notebook = gtk_notebook_new();
+    gtk_widget_set_hexpand(main_notebook, TRUE);
+    gtk_widget_set_vexpand(main_notebook, TRUE);
     
     // Create "Default View" page
     GtkWidget *default_view = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(default_view), 10);
     gtk_grid_set_column_spacing(GTK_GRID(default_view), 10);
     gtk_container_set_border_width(GTK_CONTAINER(default_view), 10);
+    gtk_widget_set_hexpand(default_view, TRUE);
+    gtk_widget_set_vexpand(default_view, TRUE);
 
+    // Configure grid columns and rows to expand proportionally
+    gtk_grid_set_column_homogeneous(GTK_GRID(default_view), TRUE);
+    
     // Add existing views to default view
     gtk_grid_attach(GTK_GRID(default_view), memory_frame, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), process_frame, 0, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), queue_frame, 0, 2, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), resource_frame, 1, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), console_frame, 1, 1, 1, 2);
+    
+    // Set expansion properties for panels
+    gtk_widget_set_hexpand(memory_frame, TRUE);
+    gtk_widget_set_vexpand(memory_frame, TRUE);
+    gtk_widget_set_hexpand(process_frame, TRUE);
+    gtk_widget_set_vexpand(process_frame, TRUE);
+    gtk_widget_set_hexpand(queue_frame, TRUE);
+    gtk_widget_set_vexpand(queue_frame, TRUE);
+    gtk_widget_set_hexpand(resource_frame, TRUE);
+    gtk_widget_set_vexpand(resource_frame, TRUE);
+    gtk_widget_set_hexpand(console_frame, TRUE);
+    gtk_widget_set_vexpand(console_frame, TRUE);
 
     // Add default view to notebook
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), default_view, 
@@ -1904,7 +1937,13 @@ void create_gui() {
 
     // Memory View Tab
     GtkWidget *memory_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(memory_page, TRUE);
+    gtk_widget_set_vexpand(memory_page, TRUE);
+    
     GtkWidget *memory_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(memory_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(memory_scroll_tab, TRUE);
+    
     GtkWidget *memory_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(memory_store));
 
     // Copy columns from memory_list
@@ -1925,18 +1964,40 @@ void create_gui() {
 
     // Console View Tab
     GtkWidget *console_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(console_page, TRUE);
+    gtk_widget_set_vexpand(console_page, TRUE);
+    
     GtkWidget *console_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(console_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(console_scroll_tab, TRUE);
+    
+    // Share the same console buffer
     GtkWidget *console_text_view_tab = gtk_text_view_new_with_buffer(console_buffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_text_view_set_monospace(GTK_TEXT_VIEW(console_text_view_tab), TRUE);
+
+    // Apply console styling
+    GtkStyleContext *console_tab_context = gtk_widget_get_style_context(console_text_view_tab);
+    gtk_style_context_add_class(console_tab_context, "console-view");
+    gtk_style_context_add_provider(console_tab_context,
+        GTK_STYLE_PROVIDER(font_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
     gtk_container_add(GTK_CONTAINER(console_scroll_tab), console_text_view_tab);
     gtk_box_pack_start(GTK_BOX(console_page), console_scroll_tab, TRUE, TRUE, 0);
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), console_page,
                             gtk_label_new("Console"));
 
-    // Queue View Tab
+    // Create Queue View Tab
     GtkWidget *queue_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(queue_page, TRUE);
+    gtk_widget_set_vexpand(queue_page, TRUE);
+    
     GtkWidget *queue_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(queue_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(queue_scroll_tab, TRUE);
+    
     GtkWidget *queue_grid_tab = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(queue_grid_tab), 10);
     gtk_grid_set_column_spacing(GTK_GRID(queue_grid_tab), 10);
@@ -1979,9 +2040,15 @@ void create_gui() {
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), queue_page,
                             gtk_label_new("Queues"));
 
-    // Resource View Tab
+    // Create Resource View Tab
     GtkWidget *resource_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(resource_page, TRUE);
+    gtk_widget_set_vexpand(resource_page, TRUE);
+    
     GtkWidget *resource_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(resource_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(resource_scroll_tab, TRUE);
+    
     GtkWidget *resource_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(resource_store));
 
     // Copy columns from resource_list
@@ -2000,9 +2067,15 @@ void create_gui() {
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), resource_page,
                             gtk_label_new("Resources"));
 
-    // Add notebook to main grid
+    // Add notebook to main grid with proper expansion
     gtk_grid_attach(GTK_GRID(main_grid), main_notebook, 1, 0, 2, 3);
+    gtk_widget_set_hexpand(main_notebook, TRUE);
+    gtk_widget_set_vexpand(main_notebook, TRUE);
 
+    // Final window configuration
+    gtk_window_maximize(GTK_WINDOW(window));
+    gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+    
     // Display all widgets
     gtk_widget_show_all(window);
     
@@ -2021,6 +2094,7 @@ void create_gui() {
     console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
 }
+
 //dark mode
 void toggle_theme(GtkButton *button, gpointer user_data) {
     dark_mode = !dark_mode;
