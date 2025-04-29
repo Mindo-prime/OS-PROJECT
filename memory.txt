@@ -1,0 +1,64 @@
+
+------ MEMORY CONTENTS [Clock: 17] ------
+[ 0] Process 1 | PCB | Process_ID: 1
+[ 1] Process 1 | PCB | State: TERMINATED
+[ 2] Process 1 | PCB | Priority: 2
+[ 3] Process 1 | PCB | PC: 12
+[ 4] Process 1 | PCB | Memory_Bounds: 0-14
+[ 5] Process 1 | CODE | Line_0: semWait userInput
+[ 6] Process 1 | CODE | Line_1: assign a input
+[ 7] Process 1 | CODE | Line_2: assign b input
+[ 8] Process 1 | CODE | Line_3: semSignal userInput
+[ 9] Process 1 | CODE | Line_4: semWait userOutput
+[10] Process 1 | CODE | Line_5: printFromTo a b
+[11] Process 1 | CODE | Line_6: semSignal userOutput
+[12] Process 1 | VAR | a: 1
+[13] Process 1 | VAR | b: 9
+[14] Process 1 | VAR | : 
+[15] Process 2 | PCB | Process_ID: 2
+[16] Process 2 | PCB | State: RUNNING
+[17] Process 2 | PCB | Priority: 2
+[18] Process 2 | PCB | PC: 28
+[19] Process 2 | PCB | Memory_Bounds: 15-30
+[20] Process 2 | CODE | Line_0: semWait userInput
+[21] Process 2 | CODE | Line_1: assign a input
+[22] Process 2 | CODE | Line_2: assign b input
+[23] Process 2 | CODE | Line_3: semSignal userInput
+[24] Process 2 | CODE | Line_4: semWait file
+[25] Process 2 | CODE | Line_5: writeFile a b
+[26] Process 2 | CODE | Line_6: print a
+[27] Process 2 | CODE | Line_7: semSignal file
+[28] Process 2 | VAR | a: b.txt
+[29] Process 2 | VAR | b: hello
+[30] Process 2 | VAR | : 
+[31] Process 3 | PCB | Process_ID: 3
+[32] Process 3 | PCB | State: BLOCKED
+[33] Process 3 | PCB | Priority: 0
+[34] Process 3 | PCB | PC: 37
+[35] Process 3 | PCB | Memory_Bounds: 31-47
+[36] Process 3 | CODE | Line_0: semWait userInput
+[37] Process 3 | CODE | Line_1: assign a input
+[38] Process 3 | CODE | Line_2: semSignal userInput
+[39] Process 3 | CODE | Line_3: semWait file
+[40] Process 3 | CODE | Line_4: assign b readFile a
+[41] Process 3 | CODE | Line_5: semSignal file
+[42] Process 3 | CODE | Line_6: semWait userOutput
+[43] Process 3 | CODE | Line_7: print b
+[44] Process 3 | CODE | Line_8: semSignal userOutput
+[45] Process 3 | VAR | : 
+[46] Process 3 | VAR | : 
+[47] Process 3 | VAR | : 
+[48] Empty
+[49] Empty
+[50] Empty
+[51] Empty
+[52] Empty
+[53] Empty
+[54] Empty
+[55] Empty
+[56] Empty
+[57] Empty
+[58] Empty
+[59] Empty
+----------------------------
+
