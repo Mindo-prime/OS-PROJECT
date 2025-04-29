@@ -71,6 +71,9 @@ GtkWidget *resource_frame;
 GtkWidget *console_frame;
 GtkWidget *main_notebook;
 GtkWidget *default_view;
+//clock
+GtkWidget *real_time_label;
+guint clock_timer_id = 0;
 
 int no_rest = 0;
 // Define the process_icons structure at the top of the file
@@ -940,6 +943,14 @@ char* get_current_time_string() {
     strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
     return time_str;
 }
+//dynamic clock
+static gboolean update_clock_display(gpointer data) {
+    GtkWidget *label = GTK_WIDGET(data);
+    char buffer[128];
+    sprintf(buffer, "Real Time: %s", get_current_time_string());
+    gtk_label_set_text(GTK_LABEL(label), buffer);
+    return G_SOURCE_CONTINUE;
+}
 
 // Custom print to console function
 void console_printf(const char *format, ...) {
@@ -1435,7 +1446,7 @@ static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointe
 void create_gui() {
     // Create window
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "Retro OS Simulator");
+    gtk_window_set_title(GTK_WINDOW(window), "CACOOS OS Simulator");
     gtk_window_set_default_size(GTK_WINDOW(window), 1200, 800);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     
@@ -1489,6 +1500,14 @@ void create_gui() {
     gtk_widget_set_halign(process_count_label, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(info_grid), process_count_label, 0, 1, 1, 1);
     
+    //clock
+    GtkWidget *real_time_label = gtk_label_new("");
+    gtk_widget_set_halign(real_time_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(info_grid), real_time_label, 0, 2, 1, 1);
+
+    // Start the clock timer
+    clock_timer_id = g_timeout_add(1000, update_clock_display, real_time_label);
+
     gtk_grid_attach(GTK_GRID(sidebar), info_frame, 0, 0, 1, 1);
     
     // Create scheduler controls
