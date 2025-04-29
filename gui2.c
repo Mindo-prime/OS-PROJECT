@@ -57,7 +57,7 @@ GtkWidget *arrival_time_entry;
 GtkWidget *program_name_entry;
 GtkWidget *add_process_entry;
 //dark mode
-gboolean dark_mode = FALSE;
+gboolean dark_mode = TRUE;
 GtkWidget *theme_button;
 //tabs
 GtkWidget *memory_list_tab;
@@ -1133,9 +1133,10 @@ void reset_simulation() {
 
 //test
 GtkWidget *load_button;
-char *on_load_clicked(GtkButton *button, gpointer user_data) {
+char* on_load_clicked(GtkButton *button, gpointer user_data) {
     GtkWidget *dialog;
     GtkFileFilter *filter;
+    static char* selected_filename = NULL;  // Static to persist after function returns
     
     dialog = gtk_file_chooser_dialog_new("Open Program File",
                                         GTK_WINDOW(window),
@@ -1150,26 +1151,24 @@ char *on_load_clicked(GtkButton *button, gpointer user_data) {
     gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
     
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        char *filename;
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        
-        // Create process with the selected file
-        int pid = create_process(filename);
-        if (pid > 0) {
-            console_printf("[Clock: %d] Added program \"%s\"\n", 
-                system_clock, filename);
-        } else {
-            console_printf("[Clock: %d] Failed to add program \"%s\"\n", 
-                system_clock, filename);
+        if (selected_filename) {
+            g_free(selected_filename);
         }
-        
-        //g_free(filename);
-
-        update_gui();
-        
+        selected_filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
     }
     
     gtk_widget_destroy(dialog);
+    return selected_filename;
+}
+
+static void on_load_button_clicked(GtkButton *button, gpointer user_data);
+gboolean draw_file_icon(GtkWidget *widget, cairo_t *cr, gpointer data);
+static void on_load_button_clicked(GtkButton *button, gpointer user_data) {
+    GtkEntry *entry = GTK_ENTRY(user_data);
+    char *filename = on_load_clicked(button, NULL);
+    if (filename) {
+        gtk_entry_set_text(entry, filename);
+    }
 }
 
 // Add process dialog
@@ -1179,13 +1178,13 @@ void show_add_process_dialog() {
     GtkWidget *grid;
     
     dialog = gtk_dialog_new_with_buttons("Add Process",
-                                       GTK_WINDOW(window),
-                                       GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                       "Cancel",
-                                       GTK_RESPONSE_CANCEL,
-                                       "Add",
-                                       GTK_RESPONSE_ACCEPT,
-                                       NULL);
+                                        GTK_WINDOW(window),
+                                        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                        "Cancel",
+                                        GTK_RESPONSE_CANCEL,
+                                        "Add",
+                                        GTK_RESPONSE_ACCEPT,
+                                        NULL);
     
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
     
@@ -1196,11 +1195,27 @@ void show_add_process_dialog() {
 
     // Create button box for load button
     GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-    load_button = gtk_button_new_with_label("Load Program");
-    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_clicked), NULL);
+
+    // Create a box for the icon and label
+    GtkWidget *load_button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    load_button = gtk_button_new();
+
+    // Create the icon
+    GtkWidget *file_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(file_icon, 24, 24);
+    g_signal_connect(file_icon, "draw", G_CALLBACK(draw_file_icon), NULL);
+
+    // Create the label
+    GtkWidget *button_label = gtk_label_new("Load Program");
+
+    // Pack icon and label into the button box
+    gtk_box_pack_start(GTK_BOX(load_button_box), file_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(load_button_box), button_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(load_button), load_button_box);
+
+    // Add the button to the main button box
     gtk_box_pack_start(GTK_BOX(button_box), load_button, FALSE, FALSE, 0);
     gtk_grid_attach(GTK_GRID(grid), button_box, 0, 0, 3, 1);
-
     // Program name
     GtkWidget *name_label = gtk_label_new("Program name:");
     gtk_widget_set_halign(name_label, GTK_ALIGN_START);
@@ -1219,7 +1234,11 @@ void show_add_process_dialog() {
     
     gtk_container_add(GTK_CONTAINER(content_area), grid);
     gtk_widget_show_all(dialog);
-    
+
+    // Modified load button callback
+    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_button_clicked), program_name_entry);
+
+
     int result = gtk_dialog_run(GTK_DIALOG(dialog));
     if (result == GTK_RESPONSE_ACCEPT) {
         const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
@@ -1242,7 +1261,36 @@ void show_add_process_dialog() {
     
     gtk_widget_destroy(dialog);
 }
-
+gboolean draw_file_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw file background
+    cairo_set_source_rgb(cr, 0.9, 0.9, 0.9);
+    cairo_rectangle(cr, width * 0.1, height * 0.1, width * 0.8, height * 0.8);
+    cairo_fill(cr);
+    
+    // Draw folded corner
+    cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);
+    cairo_move_to(cr, width * 0.6, height * 0.1);
+    cairo_line_to(cr, width * 0.9, height * 0.1);
+    cairo_line_to(cr, width * 0.9, height * 0.4);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    // Draw lines representing text
+    cairo_set_source_rgb(cr, 0.6, 0.6, 0.6);
+    cairo_set_line_width(cr, 1);
+    
+    // Draw three lines
+    for (int i = 0; i < 3; i++) {
+        cairo_move_to(cr, width * 0.2, height * (0.3 + i * 0.2));
+        cairo_line_to(cr, width * 0.8, height * (0.3 + i * 0.2));
+        cairo_stroke(cr);
+    }
+    
+    return FALSE;
+}
 // Add the process to the simulation
 void add_process_to_simulation() {
     const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
@@ -1456,16 +1504,16 @@ void create_gui() {
     // Create CSS provider
     provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "window { background-color: #ffffff; }"
-        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button:hover { background-color: #d0d0d0; }"
-        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "window { background-color: #1e1e1e; }"
+        "label { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #3a3a3a; }"
+        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
         "combobox * { font-size: 14px !important; }"
-        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
-        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #3a3a3a; }"
+        "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
         "textview text { font-size: 14px !important; }"
         , -1, NULL);
     
@@ -1569,7 +1617,7 @@ void create_gui() {
     gtk_grid_attach(GTK_GRID(control_grid), add_process_button, 0, 3, 1, 1);
     
     // Add theme button
-    theme_button = gtk_button_new_with_label("Dark Mode");
+    theme_button = gtk_button_new_with_label("Light Mode");
     g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), theme_button, 0, 4, 1, 1);
     
