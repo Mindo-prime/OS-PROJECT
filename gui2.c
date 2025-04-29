@@ -56,7 +56,26 @@ GtkWidget *add_process_dialog;
 GtkWidget *arrival_time_entry;
 GtkWidget *program_name_entry;
 GtkWidget *add_process_entry;
+//dark mode
+gboolean dark_mode = FALSE;
+GtkWidget *theme_button;
+//tabs
+GtkWidget *memory_list_tab;
+GtkWidget *console_text_view_tab;
+GtkWidget *ready_queue_list_tab;
+GtkWidget *blocked_queue_list_tab;
+GtkWidget *resource_list_tab;
+GtkWidget *process_frame;
+GtkWidget *queue_frame;
+GtkWidget *resource_frame;
+GtkWidget *console_frame;
+GtkWidget *main_notebook;
+GtkWidget *default_view;
+//clock
+GtkWidget *real_time_label;
+guint clock_timer_id = 0;
 
+int no_rest = 0;
 // Define the process_icons structure at the top of the file
 typedef struct {
     GtkWidget *drawing_area;
@@ -122,18 +141,15 @@ typedef struct  {
     char* name;
     int arrival_time;
 } program;
-
-
+//backend
 int create_process(const char *program);
 PCB load_PCB(int address);
 char *process_read_file(const char *path);
 void trim(char *str);
 void print_memory();
-
-
-
-
-
+//UI
+void update_gui(void);
+void console_printf(const char *format, ...);
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
@@ -872,6 +888,25 @@ extern int program_index;
 extern int total_programs;
 extern program programs[MAX_PROCESSES];
 
+const char *light_theme_css = "window { background-color: #ffffff; }"
+    "label { color: #000000; }"
+    "button { background-color: #e0e0e0; color: #000000; }"
+    "button:hover { background-color: #d0d0d0; }"
+    "entry { background-color: #ffffff; color: #000000; }"
+    "combobox { color: #000000; }"
+    "treeview { background-color: #ffffff; color: #000000; }"
+    "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+    "textview { background-color: #ffffff; color: #000000; }";
+
+const char *dark_theme_css = "window { background-color: #1e1e1e; }"
+    "label { color: #c0c0c0; }"
+    "button { background-color: #2a2a2a; color: #c0c0c0; }"
+    "button:hover { background-color: #3a3a3a; }"
+    "entry { background-color: #2a2a2a; color: #c0c0c0; }"
+    "combobox { color: #c0c0c0; }"
+    "treeview { background-color: #1a1a1a; color: #c0c0c0; }"
+    "treeview:selected { background-color: #3a3a3a; }"
+    "textview { background-color: #000000; color: #00ff00; }";
 
 
 // Auto execution
@@ -893,10 +928,29 @@ void update_resource_list();
 void append_to_console(const char *text);
 void redirect_stdout();
 static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointer data);
+//dark mode
+void toggle_theme(GtkButton *button, gpointer user_data);
 
 // Pipe for stdout redirection
 int pipefd[2];
 GIOChannel *channel;
+
+// Function to get current time as string (needs to be defined before use)
+char* get_current_time_string() {
+    static char time_str[20];
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
+    return time_str;
+}
+//dynamic clock
+static gboolean update_clock_display(gpointer data) {
+    GtkWidget *label = GTK_WIDGET(data);
+    char buffer[128];
+    sprintf(buffer, "Real Time: %s", get_current_time_string());
+    gtk_label_set_text(GTK_LABEL(label), buffer);
+    return G_SOURCE_CONTINUE;
+}
 
 // Custom print to console function
 void console_printf(const char *format, ...) {
@@ -979,6 +1033,18 @@ void on_reset_button_clicked(GtkWidget *widget, gpointer data) {
     }
     
     reset_simulation();
+    console_printf("╔════════════════════════════════════════════════════╗\n");
+    console_printf("║            CACOOS OS Simulator Started             ║\n");
+    console_printf("║                                                    ║\n");
+    console_printf("║  Welcome to the CACOOS OS Simulator!               ║\n");
+    console_printf("║  I think I know you ?                              ║\n");
+    console_printf("║  Current Time: %s                            ║\n", get_current_time_string());
+    console_printf("║                                                    ║\n");
+    console_printf("║  Click 'Add Process' to load programs              ║\n");
+    console_printf("║  Click 'Step' to execute one clock cycle           ║\n");
+    console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
+    console_printf("╚════════════════════════════════════════════════════╝\n\n");
+
     update_gui();
 }
 
@@ -1015,6 +1081,7 @@ void on_quantum_changed(GtkSpinButton *spin_button, gpointer data) {
     console_printf("[Clock: %d] Round Robin quantum set to %d\n", system_clock, round_robin_quantum);
 }
 
+
 // Update all GUI components
 // void update_gui() {
 //     char buffer[128];
@@ -1036,17 +1103,6 @@ void on_quantum_changed(GtkSpinButton *spin_button, gpointer data) {
 //     while (gtk_events_pending())
 //         gtk_main_iteration();
 // }
-
-
-
-// Function to get current time as string (needs to be defined before use)
-char* get_current_time_string() {
-    static char time_str[20];
-    time_t now = time(NULL);
-    struct tm *t = localtime(&now);
-    strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
-    return time_str;
-}
 
 // Function to draw process icons (forward declaration before create_gui)
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data);
@@ -1072,12 +1128,52 @@ void reset_simulation() {
     console_printf("[Clock: %d] System reset and initialized\n", system_clock);
 }
 
+//test
+GtkWidget *load_button;
+char *on_load_clicked(GtkButton *button, gpointer user_data) {
+    GtkWidget *dialog;
+    GtkFileFilter *filter;
+    
+    dialog = gtk_file_chooser_dialog_new("Open Program File",
+                                        GTK_WINDOW(window),
+                                        GTK_FILE_CHOOSER_ACTION_OPEN,
+                                        "_Cancel", GTK_RESPONSE_CANCEL,
+                                        "_Open", GTK_RESPONSE_ACCEPT,
+                                        NULL);
+    
+    filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "Text Files");
+    gtk_file_filter_add_pattern(filter, "*.txt");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+    
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename;
+        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        
+        // Create process with the selected file
+        int pid = create_process(filename);
+        if (pid > 0) {
+            console_printf("[Clock: %d] Added program \"%s\"\n", 
+                system_clock, filename);
+        } else {
+            console_printf("[Clock: %d] Failed to add program \"%s\"\n", 
+                system_clock, filename);
+        }
+        
+        //g_free(filename);
+
+        update_gui();
+        
+    }
+    
+    gtk_widget_destroy(dialog);
+}
+
 // Add process dialog
 void show_add_process_dialog() {
     GtkWidget *dialog;
     GtkWidget *content_area;
     GtkWidget *grid;
-    GtkWidget *label;
     
     dialog = gtk_dialog_new_with_buttons("Add Process",
                                        GTK_WINDOW(window),
@@ -1094,27 +1190,51 @@ void show_add_process_dialog() {
     gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
     gtk_container_set_border_width(GTK_CONTAINER(grid), 20);
-    
+
+    // Create button box for load button
+    GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    load_button = gtk_button_new_with_label("Load Program");
+    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(button_box), load_button, FALSE, FALSE, 0);
+    gtk_grid_attach(GTK_GRID(grid), button_box, 0, 0, 3, 1);
+
     // Program name
-    label = gtk_label_new("Program name:");
-    gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
+    GtkWidget *name_label = gtk_label_new("Program name:");
+    gtk_widget_set_halign(name_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), name_label, 0, 1, 1, 1);
     
     program_name_entry = gtk_entry_new();
-    gtk_grid_attach(GTK_GRID(grid), program_name_entry, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), program_name_entry, 1, 1, 2, 1);
     
     // Arrival time
-    label = gtk_label_new("Arrival time:");
-    gtk_grid_attach(GTK_GRID(grid), label, 0, 1, 1, 1);
+    GtkWidget *time_label = gtk_label_new("Arrival time:");
+    gtk_widget_set_halign(time_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), time_label, 0, 2, 1, 1);
     
     arrival_time_entry = gtk_spin_button_new_with_range(system_clock, 999, 1);
-    gtk_grid_attach(GTK_GRID(grid), arrival_time_entry, 1, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), arrival_time_entry, 1, 2, 2, 1);
     
     gtk_container_add(GTK_CONTAINER(content_area), grid);
     gtk_widget_show_all(dialog);
     
     int result = gtk_dialog_run(GTK_DIALOG(dialog));
     if (result == GTK_RESPONSE_ACCEPT) {
-        add_process_to_simulation();
+        const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
+        int arrival_time = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(arrival_time_entry));
+        
+        if (program_name && strlen(program_name) > 0) {
+            if (total_programs < MAX_PROCESSES) {
+                programs[total_programs].name = strdup(program_name);
+                programs[total_programs].arrival_time = arrival_time;
+                total_programs++;
+                
+                console_printf("[Clock: %d] Added program \"%s\" with arrival time %d\n", 
+                              system_clock, program_name, arrival_time);
+                update_gui();
+            } else {
+                console_printf("[Clock: %d] Error: Maximum process limit reached\n", system_clock);
+            }
+        }
     }
     
     gtk_widget_destroy(dialog);
@@ -1326,28 +1446,24 @@ static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointe
 void create_gui() {
     // Create window
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "Retro OS Simulator");
+    gtk_window_set_title(GTK_WINDOW(window), "CACOOS OS Simulator");
     gtk_window_set_default_size(GTK_WINDOW(window), 1200, 800);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     
     // Create CSS provider
     provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "window { background-color: #1e1e1e; }"
-        "label { color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; border-radius: 0; border: 1px solid #444; transition: all 0.2s ease; }"
-        "button:hover { background-color: #3a3a3a; transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }"
-        "button:active { background-color: #fff; color: #000; }"
-        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "combobox { color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "spinbutton { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "treeview:selected { background-color: #3a3a3a; }"
-        "treeview header { background-color: #2a2a2a; color: #c0c0c0; }"
-        "textview { background-color: #000; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "scrolledwindow { border: 1px solid #444; }"
-        "frame { border: 1px solid #444; }"
-        "headerbar { background-color: #1a1a1a; color: #c0c0c0; }"
+        "window { background-color: #ffffff; }"
+        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #d0d0d0; }"
+        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }"
         , -1, NULL);
     
     gtk_style_context_add_provider_for_screen(
@@ -1384,6 +1500,14 @@ void create_gui() {
     gtk_widget_set_halign(process_count_label, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(info_grid), process_count_label, 0, 1, 1, 1);
     
+    //clock
+    GtkWidget *real_time_label = gtk_label_new("");
+    gtk_widget_set_halign(real_time_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(info_grid), real_time_label, 0, 2, 1, 1);
+
+    // Start the clock timer
+    clock_timer_id = g_timeout_add(1000, update_clock_display, real_time_label);
+
     gtk_grid_attach(GTK_GRID(sidebar), info_frame, 0, 0, 1, 1);
     
     // Create scheduler controls
@@ -1417,7 +1541,7 @@ void create_gui() {
     gtk_widget_set_sensitive(quantum_spinner, FALSE);
     
     gtk_grid_attach(GTK_GRID(sidebar), scheduler_frame, 0, 1, 1, 1);
-    
+
     // Create simulation controls
     GtkWidget *control_frame = gtk_frame_new("Controls");
     GtkWidget *control_grid = gtk_grid_new();
@@ -1440,6 +1564,11 @@ void create_gui() {
     add_process_button = gtk_button_new_with_label("Add Process");
     g_signal_connect(add_process_button, "clicked", G_CALLBACK(on_add_process_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), add_process_button, 0, 3, 1, 1);
+    
+    // Add theme button
+    theme_button = gtk_button_new_with_label("Dark Mode");
+    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);
+    gtk_grid_attach(GTK_GRID(control_grid), theme_button, 0, 4, 1, 1);
     
     gtk_grid_attach(GTK_GRID(sidebar), control_frame, 0, 2, 1, 1);
     
@@ -1485,7 +1614,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(memory_scroll), memory_list);
     gtk_container_add(GTK_CONTAINER(memory_frame), memory_scroll);
     gtk_widget_set_size_request(memory_scroll, 500, 250);
-    gtk_grid_attach(GTK_GRID(main_grid), memory_frame, 1, 0, 1, 1);
     
     // Create process list
     GtkWidget *process_frame = gtk_frame_new("Processes");
@@ -1526,7 +1654,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(process_scroll), process_list);
     gtk_container_add(GTK_CONTAINER(process_frame), process_scroll);
     gtk_widget_set_size_request(process_scroll, 500, 150);
-    gtk_grid_attach(GTK_GRID(main_grid), process_frame, 1, 1, 1, 1);
     
     // Create queue lists
     GtkWidget *queue_frame = gtk_frame_new("Queues");
@@ -1600,8 +1727,6 @@ void create_gui() {
     gtk_widget_set_size_request(blocked_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), blocked_scroll, 1, 1, 1, 1);
     
-    gtk_grid_attach(GTK_GRID(main_grid), queue_frame, 1, 2, 1, 1);
-    
     // Create resource list
     GtkWidget *resource_frame = gtk_frame_new("Resources");
     GtkWidget *resource_scroll = gtk_scrolled_window_new(NULL, NULL);
@@ -1636,7 +1761,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(resource_scroll), resource_list);
     gtk_container_add(GTK_CONTAINER(resource_frame), resource_scroll);
     gtk_widget_set_size_request(resource_scroll, 500, 150);
-    gtk_grid_attach(GTK_GRID(main_grid), resource_frame, 2, 0, 1, 1);
     
     // Create console output
     GtkWidget *console_frame = gtk_frame_new("Console Output");
@@ -1656,21 +1780,23 @@ void create_gui() {
     gdk_rgba_parse(&console_bg_color, "#000000");
     gtk_style_context_add_class(context, "console-view");
     
-    // Set custom CSS for console
-    gtk_css_provider_load_from_data(provider,
-        ".console-view { background-color: #000000; color: #00FF00; }", -1, NULL);
-        
     console_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(console_text_view));
     
     // Add custom font - monospace with larger size for retro feel
     PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 12");
-    gtk_widget_override_font(console_text_view, font_desc);
+    GtkCssProvider *font_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(font_provider,
+        "textview { font-family: 'Monospace'; font-size: 12px; }", -1, NULL);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(console_text_view),
+        GTK_STYLE_PROVIDER(font_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(font_provider);
     pango_font_description_free(font_desc);
     
     gtk_container_add(GTK_CONTAINER(console_scroll), console_text_view);
     gtk_container_add(GTK_CONTAINER(console_frame), console_scroll);
     gtk_widget_set_size_request(console_scroll, 500, 300);
-    gtk_grid_attach(GTK_GRID(main_grid), console_frame, 2, 1, 1, 2);
     
     // Add process icons section (Xerox Star-like)
     GtkWidget *icons_frame = gtk_frame_new("Process Icons");
@@ -1705,6 +1831,127 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), icons_frame, 0, 3, 1, 1);
     
+    // Create main notebook for switching between views
+    GtkWidget *main_notebook = gtk_notebook_new();
+    
+    // Create "Default View" page
+    GtkWidget *default_view = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(default_view), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(default_view), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(default_view), 10);
+
+    // Add existing views to default view
+    gtk_grid_attach(GTK_GRID(default_view), memory_frame, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), process_frame, 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), queue_frame, 0, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), resource_frame, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), console_frame, 1, 1, 1, 2);
+
+    // Add default view to notebook
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), default_view, 
+                            gtk_label_new("Default View"));
+
+    // Memory View Tab
+    GtkWidget *memory_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *memory_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *memory_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(memory_store));
+
+    // Copy columns from memory_list
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(memory_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(memory_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(memory_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    gtk_container_add(GTK_CONTAINER(memory_scroll_tab), memory_list_tab);
+    gtk_box_pack_start(GTK_BOX(memory_page), memory_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), memory_page,
+                            gtk_label_new("Memory"));
+
+    // Console View Tab
+    GtkWidget *console_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *console_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *console_text_view_tab = gtk_text_view_new_with_buffer(console_buffer);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_container_add(GTK_CONTAINER(console_scroll_tab), console_text_view_tab);
+    gtk_box_pack_start(GTK_BOX(console_page), console_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), console_page,
+                            gtk_label_new("Console"));
+
+    // Queue View Tab
+    GtkWidget *queue_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *queue_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *queue_grid_tab = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(queue_grid_tab), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(queue_grid_tab), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(queue_grid_tab), 10);
+    
+    // Ready queue tab
+    GtkWidget *ready_queue_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(ready_queue_store));
+    // Blocked queue tab
+    GtkWidget *blocked_queue_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(blocked_queue_store));
+
+    // Copy columns for ready queue
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(ready_queue_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(ready_queue_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(ready_queue_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    // Copy columns for blocked queue
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(blocked_queue_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(blocked_queue_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(blocked_queue_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    // Add queues to the grid
+    gtk_grid_attach(GTK_GRID(queue_grid_tab), ready_queue_list_tab, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(queue_grid_tab), blocked_queue_list_tab, 1, 0, 1, 1);
+    
+    // Add grid to scroll window
+    gtk_container_add(GTK_CONTAINER(queue_scroll_tab), queue_grid_tab);
+    gtk_box_pack_start(GTK_BOX(queue_page), queue_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), queue_page,
+                            gtk_label_new("Queues"));
+
+    // Resource View Tab
+    GtkWidget *resource_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *resource_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *resource_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(resource_store));
+
+    // Copy columns from resource_list
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(resource_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(resource_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(resource_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    gtk_container_add(GTK_CONTAINER(resource_scroll_tab), resource_list_tab);
+    gtk_box_pack_start(GTK_BOX(resource_page), resource_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), resource_page,
+                            gtk_label_new("Resources"));
+
+    // Add notebook to main grid
+    gtk_grid_attach(GTK_GRID(main_grid), main_notebook, 1, 0, 2, 3);
+
     // Display all widgets
     gtk_widget_show_all(window);
     
@@ -1713,17 +1960,67 @@ void create_gui() {
     
     // Welcome message
     console_printf("╔════════════════════════════════════════════════════╗\n");
-    console_printf("║            Retro OS Simulator Started              ║\n");
+    console_printf("║            CACOOS OS Simulator Started             ║\n");
     console_printf("║                                                    ║\n");
-    console_printf("║  Welcome to the Retro OS Simulator!                ║\n");
-    console_printf("║  Current Time: %s                           ║\n", get_current_time_string());
+    console_printf("║  Welcome to the CACOOS OS Simulator!               ║\n");
+    console_printf("║  Current Time: %s                            ║\n", get_current_time_string());
     console_printf("║                                                    ║\n");
     console_printf("║  Click 'Add Process' to load programs              ║\n");
-    console_printf("║  Click 'Step' to execute one clock cycle          ║\n");
-    console_printf("║  Click 'Start Auto' for continuous execution      ║\n");
+    console_printf("║  Click 'Step' to execute one clock cycle           ║\n");
+    console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
 }
-
+//dark mode
+void toggle_theme(GtkButton *button, gpointer user_data) {
+    dark_mode = !dark_mode;
+    
+    // Update button label
+    gtk_button_set_label(GTK_BUTTON(theme_button), 
+                        dark_mode ? "Light Mode" : "Dark Mode");
+    
+    // Create CSS with consistent font sizes
+    const char *theme_css = dark_mode ? 
+        "window { background-color: #1e1e1e; }"
+        "label { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #3a3a3a; }"
+        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #3a3a3a; }"
+        "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }" :
+        
+        "window { background-color: #ffffff; }"
+        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #d0d0d0; }"
+        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }";
+    
+    // Apply theme
+    gtk_css_provider_load_from_data(provider, theme_css, -1, NULL);
+    
+    // Force consistent console font
+    GtkCssProvider *console_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(console_provider,
+        "textview, textview text { font-family: 'Monospace'; font-size: 14px !important; }", -1, NULL);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(console_text_view),
+        GTK_STYLE_PROVIDER(console_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(console_provider);
+    
+    console_printf("[Clock: %d] Switched to %s theme\n", 
+                  system_clock, 
+                  dark_mode ? "dark" : "light");
+}
 // Function to draw process icons
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
     int idx = GPOINTER_TO_INT(data);
@@ -1829,6 +2126,11 @@ void update_gui() {
     update_queue_lists();
     update_resource_list();
     update_process_icons();
+    gtk_widget_queue_draw(memory_list_tab);
+    gtk_widget_queue_draw(console_text_view_tab);
+    gtk_widget_queue_draw(ready_queue_list_tab);
+    gtk_widget_queue_draw(blocked_queue_list_tab);
+    gtk_widget_queue_draw(resource_list_tab);
     
     // Process events to update UI
     while (gtk_events_pending())
