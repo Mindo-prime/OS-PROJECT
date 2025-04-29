@@ -199,9 +199,10 @@ void unblock_process(int mutex_index) {
         fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
         return;
     }
+    console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, mutexes[mutex_index].name);
     if (blocked_queue[mutex_index].size > 0) {
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
-        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
+        console_printf("[Clock: %d] Process %d unblocked\n", system_clock, unblocked_process.process_id);
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
@@ -219,13 +220,13 @@ void sem_wait_resource(char *name) {
     }
     
      if (mutexes[idx].value < 0) {
-        printf("[Clock: %d] Process %d: sem_wait_resource blocked %s \n", system_clock, current_process.process_id, name);
+        console_printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
         current_process.program_counter--;
         sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
     } else {
         mutexes[idx].value=-1;
-        printf("[Clock: %d] Process %d: sem_wait_resource acquired %s \n", system_clock, current_process.process_id, name);
+        console_printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     
@@ -282,7 +283,7 @@ void set_variable(char *name, char *value) {
                 return;
             }
         }
-        printf("Error: No variable space available for process %d\n", current_process.process_id);
+        console_printf("Error: No variable space available for process %d\n", current_process.process_id);
     }
 }
 
@@ -315,14 +316,14 @@ void process_print(char * args) {
         printf("[Clock: %d] Process %d: %s = %s\n", system_clock, current_process.process_id, args, value);
     } else {
         console_printf("[Clock: %d] Process %d: value not found %s\n", system_clock, current_process.process_id, args);
-        printf("[Clock: %d] Process %d: value not found %s\n", system_clock, current_process.process_id, args);
+        console_printf("[Clock: %d] Process %d: value not found %s\n", system_clock, current_process.process_id, args);
     }
 }
 //chatgpt 
 void process_assign(char *args) {    
     // First, check if args is NULL
     if (args == NULL) {
-        printf("[Clock: %d] Process %d: Error: Invalid assign command (NULL args)\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: Error: Invalid assign command (NULL args)\n", system_clock, current_process.process_id);
         return;
     }
     
@@ -335,7 +336,7 @@ void process_assign(char *args) {
     char *name = strtok_r(args_copy, " ", &token_context);
     
     if (name == NULL) {
-        printf("[Clock: %d] Process %d: Error: Missing variable name in assign command\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: Error: Missing variable name in assign command\n", system_clock, current_process.process_id);
         return;
     }
     
@@ -344,7 +345,7 @@ void process_assign(char *args) {
     // Get the rest of the command after the variable name
     char *rest = strtok_r(NULL, "", &token_context);
     if (rest == NULL) {
-        printf("[Clock: %d] Process %d: Error: Missing value in assign command\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: Error: Missing value in assign command\n", system_clock, current_process.process_id);
         return;
     }
     
@@ -357,6 +358,7 @@ void process_assign(char *args) {
             "Process %d: Enter value for %s:",
             current_process.process_id, name);
         
+        console_printf("[Clock: %d] Process %d: Value of %s taken\n", system_clock, current_process.process_id, name);
         GtkWidget *entry = gtk_entry_new();
         gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), entry);
         gtk_widget_show_all(dialog);
@@ -380,7 +382,7 @@ void process_assign(char *args) {
         if (file_content != NULL) {
             set_variable(name, file_content);
         } else {
-            printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, current_process.process_id, filepath);
+            console_printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, current_process.process_id, filepath);
         }
     }
     // Direct assignment
@@ -420,7 +422,7 @@ void process_write_file(char* args){
     char* data = get_variable_value(num_2);
 
     if(space == NULL) {
-        printf("[Clock: %d] Process %d: Error: Invalid writeFile format\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: Error: Invalid writeFile format\n", system_clock, current_process.process_id);
         return;
     }
     trim(name);
@@ -429,9 +431,9 @@ void process_write_file(char* args){
 
     if (fptr != NULL){
         fputs(data,fptr);
-        printf("[Clock: %d] Process %d: File written successfully\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: File written successfully\n", system_clock, current_process.process_id);
     }else
-        printf("[Clock: %d] Process %d: An error occurred writing to the file.\n", system_clock, current_process.process_id);
+    console_printf("[Clock: %d] Process %d: An error occurred writing to the file.\n", system_clock, current_process.process_id);
 
     fclose(fptr);
 }
@@ -447,13 +449,13 @@ void process_print_from_to(char* args){
     a = atoi(get_variable_value(num_1));
     b = atoi(get_variable_value(num_2));
     update_gui();
-    printf("[Clock: %d] Process %d: num_1 = %s, num_2 = %s, a = %d b = %d \n", system_clock, current_process.process_id, num_1, num_2, a, b);
+    console_printf("[Clock: %d] Process %d: num_1 = %s, num_2 = %s, a = %d b = %d \n", system_clock, current_process.process_id, num_1, num_2, a, b);
     for (int i = a; i <= b; i++){
-        printf("%i\n", i);
+        console_printf("%i\n", i);
         console_printf("%i, ",i);
     }
     console_printf("\n");
-    printf("\n");
+    console_printf("\n");
 }
 
 void execute_line(char *line) {
@@ -520,7 +522,7 @@ int state_to_int(char* state) {
 
 PCB load_PCB(int address) {
     if (address < 0 || address >= MEMORY_SIZE || memory[address].type != T_PCB || strcmp(memory[address].name, "Process_ID") != 0) {
-        printf("Error: invalid PCB address.\n");
+        console_printf("Error: invalid PCB address.\n");
         return (PCB) {-1};
     }
     PCB process;
@@ -624,7 +626,8 @@ void schedule() {
             if (quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
-            break;}
+            break;
+        }
     }
     is_current_process_blocked = 0;
 }
@@ -632,7 +635,7 @@ void schedule() {
 
 void check_for_processes() {
     while (program_index < total_programs && programs[program_index].arrival_time == system_clock) {
-        printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
+        console_printf("[Clock: %d] %s created.\n", system_clock, programs[program_index].name);
         create_process(programs[program_index++].name);
     }
 }
@@ -644,14 +647,17 @@ void run_clock_cycle() {
     schedule();
    
     if (current_process.process_id == -1) {
-        printf("[Clock: %d] Idle\n", system_clock);
+        console_printf("[Clock: %d] Idle\n", system_clock);
         system_clock++;
         return;
     }
    
     execute_line(memory[current_process.program_counter].value); 
-   
     current_process.program_counter++;
+    char program_done = current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
+    if (program_done) {
+        console_printf("[Clock: %d] Process %d terminated\n", system_clock, current_process.process_id);
+    }
     int offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
     #ifdef TEST_MODE
@@ -685,11 +691,11 @@ void run_clock_cycle() {
 
 int create_process(const char *program) {
     if (process_count >= MAX_PROCESSES) {
-        printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
+        console_printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
         return -1;
     }
     if (memory_allocated >= MEMORY_SIZE){
-        printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
+        console_printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
         return -1;
     }
     FILE *fptr = fopen(program,"r");
@@ -705,7 +711,7 @@ int create_process(const char *program) {
         }
     }
     if (memory_allocated + line_count + NUM_PCB + MAX_VARS_PER  > MEMORY_SIZE) {
-        printf("[Clock: %d] Error: Not enough memory for process\n", system_clock);
+        console_printf("[Clock: %d] Error: Not enough memory for process\n", system_clock);
         fclose(fptr);
         return -1;
     }
