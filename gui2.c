@@ -70,7 +70,7 @@ ProcessIcon process_icons[MAX_PROCESSES];
 
 
 // Added global clock
-int scheduling = ROUND_ROBIN;
+int scheduling = FIFO;
 int system_clock = 1;
 
 
@@ -199,7 +199,6 @@ void unblock_process(int mutex_index) {
         fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
         return;
     }
-    console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, mutexes[mutex_index].name);
     if (blocked_queue[mutex_index].size > 0) {
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
         console_printf("[Clock: %d] Process %d unblocked\n", system_clock, unblocked_process.process_id);
@@ -240,10 +239,10 @@ void sem_signal_resource(char *name) {
         return;
     }
    
+    console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
     if (mutexes[idx].value <= 0) {
         unblock_process(idx);
         mutexes[idx].value=1;
-        //printf("[Clock: %d] Process %d: sem_signal_resource released %s \n", system_clock, current_process.process_id, name);
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     

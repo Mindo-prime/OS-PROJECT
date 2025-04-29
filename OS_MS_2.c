@@ -72,7 +72,7 @@ typedef struct  {
     int arrival_time;
 } program;
 
-int scheduling = ROUND_ROBIN;
+int scheduling = MLFQ;
 int system_clock = 1;
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
@@ -179,7 +179,7 @@ void unblock_process(int mutex_index) {
     }
     if (blocked_queue[mutex_index].size > 0) {
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
-        printf("[Clock: %d] Process %d: sem_signal_resource unblocked %s \n", system_clock, unblocked_process.process_id, mutexes[mutex_index].name);
+        printf("[Clock: %d] Process %d unblocked\n", system_clock, unblocked_process.process_id);
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
@@ -197,13 +197,13 @@ void sem_wait_resource(char *name) {
     }
     
      if (mutexes[idx].value < 0) {
-        printf("[Clock: %d] Process %d: sem_wait_resource blocked %s \n", system_clock, current_process.process_id, name);
+        printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
         current_process.program_counter--;
         sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
     } else {
         mutexes[idx].value=-1;
-        printf("[Clock: %d] Process %d: sem_wait_resource acquired %s \n", system_clock, current_process.process_id, name);
+        printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     
@@ -216,11 +216,11 @@ void sem_signal_resource(char *name) {
         fprintf(stderr, "[Clock: %d] sem_signal_resource: unknown mutex \"%s\"\n", system_clock, name);
         return;
     }
-   
+    printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
+
     if (mutexes[idx].value <= 0) {
         unblock_process(idx);
         mutexes[idx].value=1;
-        //printf("[Clock: %d] Process %d: sem_signal_resource released %s \n", system_clock, current_process.process_id, name);
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     
@@ -646,8 +646,12 @@ void run_clock_cycle() {
     }
    
     execute_line(memory[current_process.program_counter].value); 
-   
     current_process.program_counter++;
+    char program_done = current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
+    if (program_done) {
+        printf("[Clock: %d] Process %d terminated\n", system_clock, current_process.process_id);
+    }
+
     int offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
     #ifdef TEST_MODE
