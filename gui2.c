@@ -122,18 +122,15 @@ typedef struct  {
     char* name;
     int arrival_time;
 } program;
-
-
+//backend
 int create_process(const char *program);
 PCB load_PCB(int address);
 char *process_read_file(const char *path);
 void trim(char *str);
 void print_memory();
-
-
-
-
-
+//UI
+void update_gui(void);
+void console_printf(const char *format, ...);
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
@@ -898,6 +895,15 @@ static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointe
 int pipefd[2];
 GIOChannel *channel;
 
+// Function to get current time as string (needs to be defined before use)
+char* get_current_time_string() {
+    static char time_str[20];
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
+    return time_str;
+}
+
 // Custom print to console function
 void console_printf(const char *format, ...) {
     va_list args;
@@ -979,6 +985,18 @@ void on_reset_button_clicked(GtkWidget *widget, gpointer data) {
     }
     
     reset_simulation();
+    console_printf("╔════════════════════════════════════════════════════╗\n");
+    console_printf("║            CACOOS OS Simulator Started             ║\n");
+    console_printf("║                                                    ║\n");
+    console_printf("║  Welcome to the CACOOS OS Simulator!               ║\n");
+    console_printf("║  I think I know you ?                              ║\n");
+    console_printf("║  Current Time: %s                            ║\n", get_current_time_string());
+    console_printf("║                                                    ║\n");
+    console_printf("║  Click 'Add Process' to load programs              ║\n");
+    console_printf("║  Click 'Step' to execute one clock cycle           ║\n");
+    console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
+    console_printf("╚════════════════════════════════════════════════════╝\n\n");
+
     update_gui();
 }
 
@@ -1037,17 +1055,6 @@ void on_quantum_changed(GtkSpinButton *spin_button, gpointer data) {
 //         gtk_main_iteration();
 // }
 
-
-
-// Function to get current time as string (needs to be defined before use)
-char* get_current_time_string() {
-    static char time_str[20];
-    time_t now = time(NULL);
-    struct tm *t = localtime(&now);
-    strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
-    return time_str;
-}
-
 // Function to draw process icons (forward declaration before create_gui)
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data);
 
@@ -1072,12 +1079,52 @@ void reset_simulation() {
     console_printf("[Clock: %d] System reset and initialized\n", system_clock);
 }
 
+//test
+GtkWidget *load_button;
+char *on_load_clicked(GtkButton *button, gpointer user_data) {
+    GtkWidget *dialog;
+    GtkFileFilter *filter;
+    
+    dialog = gtk_file_chooser_dialog_new("Open Program File",
+                                        GTK_WINDOW(window),
+                                        GTK_FILE_CHOOSER_ACTION_OPEN,
+                                        "_Cancel", GTK_RESPONSE_CANCEL,
+                                        "_Open", GTK_RESPONSE_ACCEPT,
+                                        NULL);
+    
+    filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "Text Files");
+    gtk_file_filter_add_pattern(filter, "*.txt");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+    
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename;
+        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        
+        // Create process with the selected file
+        int pid = create_process(filename);
+        if (pid > 0) {
+            console_printf("[Clock: %d] Added program \"%s\"\n", 
+                system_clock, filename);
+        } else {
+            console_printf("[Clock: %d] Failed to add program \"%s\"\n", 
+                system_clock, filename);
+        }
+        
+        //g_free(filename);
+
+        update_gui();
+        
+    }
+    
+    gtk_widget_destroy(dialog);
+}
+
 // Add process dialog
 void show_add_process_dialog() {
     GtkWidget *dialog;
     GtkWidget *content_area;
     GtkWidget *grid;
-    GtkWidget *label;
     
     dialog = gtk_dialog_new_with_buttons("Add Process",
                                        GTK_WINDOW(window),
@@ -1094,27 +1141,51 @@ void show_add_process_dialog() {
     gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
     gtk_container_set_border_width(GTK_CONTAINER(grid), 20);
-    
+
+    // Create button box for load button
+    GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    load_button = gtk_button_new_with_label("Load Program");
+    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(button_box), load_button, FALSE, FALSE, 0);
+    gtk_grid_attach(GTK_GRID(grid), button_box, 0, 0, 3, 1);
+
     // Program name
-    label = gtk_label_new("Program name:");
-    gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
+    GtkWidget *name_label = gtk_label_new("Program name:");
+    gtk_widget_set_halign(name_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), name_label, 0, 1, 1, 1);
     
     program_name_entry = gtk_entry_new();
-    gtk_grid_attach(GTK_GRID(grid), program_name_entry, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), program_name_entry, 1, 1, 2, 1);
     
     // Arrival time
-    label = gtk_label_new("Arrival time:");
-    gtk_grid_attach(GTK_GRID(grid), label, 0, 1, 1, 1);
+    GtkWidget *time_label = gtk_label_new("Arrival time:");
+    gtk_widget_set_halign(time_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), time_label, 0, 2, 1, 1);
     
     arrival_time_entry = gtk_spin_button_new_with_range(system_clock, 999, 1);
-    gtk_grid_attach(GTK_GRID(grid), arrival_time_entry, 1, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), arrival_time_entry, 1, 2, 2, 1);
     
     gtk_container_add(GTK_CONTAINER(content_area), grid);
     gtk_widget_show_all(dialog);
     
     int result = gtk_dialog_run(GTK_DIALOG(dialog));
     if (result == GTK_RESPONSE_ACCEPT) {
-        add_process_to_simulation();
+        const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
+        int arrival_time = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(arrival_time_entry));
+        
+        if (program_name && strlen(program_name) > 0) {
+            if (total_programs < MAX_PROCESSES) {
+                programs[total_programs].name = strdup(program_name);
+                programs[total_programs].arrival_time = arrival_time;
+                total_programs++;
+                
+                console_printf("[Clock: %d] Added program \"%s\" with arrival time %d\n", 
+                              system_clock, program_name, arrival_time);
+                update_gui();
+            } else {
+                console_printf("[Clock: %d] Error: Maximum process limit reached\n", system_clock);
+            }
+        }
     }
     
     gtk_widget_destroy(dialog);
@@ -1664,7 +1735,14 @@ void create_gui() {
     
     // Add custom font - monospace with larger size for retro feel
     PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 12");
-    gtk_widget_override_font(console_text_view, font_desc);
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider,
+        "textview { font-family: 'Monospace'; font-size: 12px; }", -1, NULL);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(console_text_view),
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
     pango_font_description_free(font_desc);
     
     gtk_container_add(GTK_CONTAINER(console_scroll), console_text_view);
@@ -1713,15 +1791,16 @@ void create_gui() {
     
     // Welcome message
     console_printf("╔════════════════════════════════════════════════════╗\n");
-    console_printf("║            Retro OS Simulator Started              ║\n");
+    console_printf("║            CACOOS OS Simulator Started             ║\n");
     console_printf("║                                                    ║\n");
-    console_printf("║  Welcome to the Retro OS Simulator!                ║\n");
-    console_printf("║  Current Time: %s                           ║\n", get_current_time_string());
+    console_printf("║  Welcome to the CACOOS OS Simulator!               ║\n");
+    console_printf("║  Current Time: %s                            ║\n", get_current_time_string());
     console_printf("║                                                    ║\n");
     console_printf("║  Click 'Add Process' to load programs              ║\n");
-    console_printf("║  Click 'Step' to execute one clock cycle          ║\n");
-    console_printf("║  Click 'Start Auto' for continuous execution      ║\n");
+    console_printf("║  Click 'Step' to execute one clock cycle           ║\n");
+    console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
+
 }
 
 // Function to draw process icons
