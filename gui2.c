@@ -647,6 +647,9 @@ void run_clock_cycle() {
     schedule();
    
     if (current_process.process_id == -1) {
+        if (program_index == total_programs) {
+            return;
+        }
         console_printf("[Clock: %d] Idle\n", system_clock);
         system_clock++;
         return;
