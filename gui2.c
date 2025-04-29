@@ -59,7 +59,20 @@ GtkWidget *add_process_entry;
 //dark mode
 gboolean dark_mode = FALSE;
 GtkWidget *theme_button;
+//tabs
+GtkWidget *memory_list_tab;
+GtkWidget *console_text_view_tab;
+GtkWidget *ready_queue_list_tab;
+GtkWidget *blocked_queue_list_tab;
+GtkWidget *resource_list_tab;
+GtkWidget *process_frame;
+GtkWidget *queue_frame;
+GtkWidget *resource_frame;
+GtkWidget *console_frame;
+GtkWidget *main_notebook;
+GtkWidget *default_view;
 
+int no_rest = 0;
 // Define the process_icons structure at the top of the file
 typedef struct {
     GtkWidget *drawing_area;
@@ -1429,21 +1442,17 @@ void create_gui() {
     // Create CSS provider
     provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "window { background-color: #1e1e1e; }"
-        "label { color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; border-radius: 0; border: 1px solid #444; transition: all 0.2s ease; }"
-        "button:hover { background-color: #3a3a3a; transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }"
-        "button:active { background-color: #fff; color: #000; }"
-        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "combobox { color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "spinbutton { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "treeview:selected { background-color: #3a3a3a; }"
-        "treeview header { background-color: #2a2a2a; color: #c0c0c0; }"
-        "textview { background-color: #000; color: #c0c0c0; font-family: 'Courier New', monospace; }"
-        "scrolledwindow { border: 1px solid #444; }"
-        "frame { border: 1px solid #444; }"
-        "headerbar { background-color: #1a1a1a; color: #c0c0c0; }"
+        "window { background-color: #ffffff; }"
+        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #d0d0d0; }"
+        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }"
         , -1, NULL);
     
     gtk_style_context_add_provider_for_screen(
@@ -1586,7 +1595,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(memory_scroll), memory_list);
     gtk_container_add(GTK_CONTAINER(memory_frame), memory_scroll);
     gtk_widget_set_size_request(memory_scroll, 500, 250);
-    gtk_grid_attach(GTK_GRID(main_grid), memory_frame, 1, 0, 1, 1);
     
     // Create process list
     GtkWidget *process_frame = gtk_frame_new("Processes");
@@ -1627,7 +1635,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(process_scroll), process_list);
     gtk_container_add(GTK_CONTAINER(process_frame), process_scroll);
     gtk_widget_set_size_request(process_scroll, 500, 150);
-    gtk_grid_attach(GTK_GRID(main_grid), process_frame, 1, 1, 1, 1);
     
     // Create queue lists
     GtkWidget *queue_frame = gtk_frame_new("Queues");
@@ -1701,8 +1708,6 @@ void create_gui() {
     gtk_widget_set_size_request(blocked_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), blocked_scroll, 1, 1, 1, 1);
     
-    gtk_grid_attach(GTK_GRID(main_grid), queue_frame, 1, 2, 1, 1);
-    
     // Create resource list
     GtkWidget *resource_frame = gtk_frame_new("Resources");
     GtkWidget *resource_scroll = gtk_scrolled_window_new(NULL, NULL);
@@ -1737,7 +1742,6 @@ void create_gui() {
     gtk_container_add(GTK_CONTAINER(resource_scroll), resource_list);
     gtk_container_add(GTK_CONTAINER(resource_frame), resource_scroll);
     gtk_widget_set_size_request(resource_scroll, 500, 150);
-    gtk_grid_attach(GTK_GRID(main_grid), resource_frame, 2, 0, 1, 1);
     
     // Create console output
     GtkWidget *console_frame = gtk_frame_new("Console Output");
@@ -1757,28 +1761,23 @@ void create_gui() {
     gdk_rgba_parse(&console_bg_color, "#000000");
     gtk_style_context_add_class(context, "console-view");
     
-    // Set custom CSS for console
-    gtk_css_provider_load_from_data(provider,
-        ".console-view { background-color: #000000; color: #00FF00; }", -1, NULL);
-        
     console_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(console_text_view));
     
     // Add custom font - monospace with larger size for retro feel
     PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 12");
-    GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider,
+    GtkCssProvider *font_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(font_provider,
         "textview { font-family: 'Monospace'; font-size: 12px; }", -1, NULL);
     gtk_style_context_add_provider(
         gtk_widget_get_style_context(console_text_view),
-        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER(font_provider),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(provider);
+    g_object_unref(font_provider);
     pango_font_description_free(font_desc);
     
     gtk_container_add(GTK_CONTAINER(console_scroll), console_text_view);
     gtk_container_add(GTK_CONTAINER(console_frame), console_scroll);
     gtk_widget_set_size_request(console_scroll, 500, 300);
-    gtk_grid_attach(GTK_GRID(main_grid), console_frame, 2, 1, 1, 2);
     
     // Add process icons section (Xerox Star-like)
     GtkWidget *icons_frame = gtk_frame_new("Process Icons");
@@ -1813,6 +1812,127 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), icons_frame, 0, 3, 1, 1);
     
+    // Create main notebook for switching between views
+    GtkWidget *main_notebook = gtk_notebook_new();
+    
+    // Create "Default View" page
+    GtkWidget *default_view = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(default_view), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(default_view), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(default_view), 10);
+
+    // Add existing views to default view
+    gtk_grid_attach(GTK_GRID(default_view), memory_frame, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), process_frame, 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), queue_frame, 0, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), resource_frame, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(default_view), console_frame, 1, 1, 1, 2);
+
+    // Add default view to notebook
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), default_view, 
+                            gtk_label_new("Default View"));
+
+    // Memory View Tab
+    GtkWidget *memory_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *memory_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *memory_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(memory_store));
+
+    // Copy columns from memory_list
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(memory_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(memory_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(memory_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    gtk_container_add(GTK_CONTAINER(memory_scroll_tab), memory_list_tab);
+    gtk_box_pack_start(GTK_BOX(memory_page), memory_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), memory_page,
+                            gtk_label_new("Memory"));
+
+    // Console View Tab
+    GtkWidget *console_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *console_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *console_text_view_tab = gtk_text_view_new_with_buffer(console_buffer);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_container_add(GTK_CONTAINER(console_scroll_tab), console_text_view_tab);
+    gtk_box_pack_start(GTK_BOX(console_page), console_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), console_page,
+                            gtk_label_new("Console"));
+
+    // Queue View Tab
+    GtkWidget *queue_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *queue_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *queue_grid_tab = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(queue_grid_tab), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(queue_grid_tab), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(queue_grid_tab), 10);
+    
+    // Ready queue tab
+    GtkWidget *ready_queue_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(ready_queue_store));
+    // Blocked queue tab
+    GtkWidget *blocked_queue_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(blocked_queue_store));
+
+    // Copy columns for ready queue
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(ready_queue_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(ready_queue_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(ready_queue_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    // Copy columns for blocked queue
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(blocked_queue_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(blocked_queue_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(blocked_queue_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    // Add queues to the grid
+    gtk_grid_attach(GTK_GRID(queue_grid_tab), ready_queue_list_tab, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(queue_grid_tab), blocked_queue_list_tab, 1, 0, 1, 1);
+    
+    // Add grid to scroll window
+    gtk_container_add(GTK_CONTAINER(queue_scroll_tab), queue_grid_tab);
+    gtk_box_pack_start(GTK_BOX(queue_page), queue_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), queue_page,
+                            gtk_label_new("Queues"));
+
+    // Resource View Tab
+    GtkWidget *resource_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *resource_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *resource_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(resource_store));
+
+    // Copy columns from resource_list
+    for (int i = 0; i < gtk_tree_view_get_n_columns(GTK_TREE_VIEW(resource_list)); i++) {
+        GtkTreeViewColumn *col = gtk_tree_view_get_column(GTK_TREE_VIEW(resource_list), i);
+        gtk_tree_view_append_column(GTK_TREE_VIEW(resource_list_tab), 
+                                gtk_tree_view_column_new_with_attributes(
+                                    gtk_tree_view_column_get_title(col),
+                                    gtk_cell_renderer_text_new(),
+                                    "text", i,
+                                    NULL));
+    }
+
+    gtk_container_add(GTK_CONTAINER(resource_scroll_tab), resource_list_tab);
+    gtk_box_pack_start(GTK_BOX(resource_page), resource_scroll_tab, TRUE, TRUE, 0);
+    gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), resource_page,
+                            gtk_label_new("Resources"));
+
+    // Add notebook to main grid
+    gtk_grid_attach(GTK_GRID(main_grid), main_notebook, 1, 0, 2, 3);
+
     // Display all widgets
     gtk_widget_show_all(window);
     
@@ -1830,7 +1950,6 @@ void create_gui() {
     console_printf("║  Click 'Step' to execute one clock cycle           ║\n");
     console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
-
 }
 //dark mode
 void toggle_theme(GtkButton *button, gpointer user_data) {
@@ -1840,9 +1959,44 @@ void toggle_theme(GtkButton *button, gpointer user_data) {
     gtk_button_set_label(GTK_BUTTON(theme_button), 
                         dark_mode ? "Light Mode" : "Dark Mode");
     
-    // Apply appropriate theme
-    gtk_css_provider_load_from_data(provider,
-        dark_mode ? dark_theme_css : light_theme_css, -1, NULL);
+    // Create CSS with consistent font sizes
+    const char *theme_css = dark_mode ? 
+        "window { background-color: #1e1e1e; }"
+        "label { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #3a3a3a; }"
+        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #3a3a3a; }"
+        "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }" :
+        
+        "window { background-color: #ffffff; }"
+        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "button:hover { background-color: #d0d0d0; }"
+        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "combobox * { font-size: 14px !important; }"
+        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "textview text { font-size: 14px !important; }";
+    
+    // Apply theme
+    gtk_css_provider_load_from_data(provider, theme_css, -1, NULL);
+    
+    // Force consistent console font
+    GtkCssProvider *console_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(console_provider,
+        "textview, textview text { font-family: 'Monospace'; font-size: 14px !important; }", -1, NULL);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(console_text_view),
+        GTK_STYLE_PROVIDER(console_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(console_provider);
     
     console_printf("[Clock: %d] Switched to %s theme\n", 
                   system_clock, 
@@ -1953,6 +2107,11 @@ void update_gui() {
     update_queue_lists();
     update_resource_list();
     update_process_icons();
+    gtk_widget_queue_draw(memory_list_tab);
+    gtk_widget_queue_draw(console_text_view_tab);
+    gtk_widget_queue_draw(ready_queue_list_tab);
+    gtk_widget_queue_draw(blocked_queue_list_tab);
+    gtk_widget_queue_draw(resource_list_tab);
     
     // Process events to update UI
     while (gtk_events_pending())
