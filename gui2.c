@@ -56,6 +56,9 @@ GtkWidget *add_process_dialog;
 GtkWidget *arrival_time_entry;
 GtkWidget *program_name_entry;
 GtkWidget *add_process_entry;
+//dark mode
+gboolean dark_mode = FALSE;
+GtkWidget *theme_button;
 
 // Define the process_icons structure at the top of the file
 typedef struct {
@@ -869,6 +872,25 @@ extern int program_index;
 extern int total_programs;
 extern program programs[MAX_PROCESSES];
 
+const char *light_theme_css = "window { background-color: #ffffff; }"
+    "label { color: #000000; }"
+    "button { background-color: #e0e0e0; color: #000000; }"
+    "button:hover { background-color: #d0d0d0; }"
+    "entry { background-color: #ffffff; color: #000000; }"
+    "combobox { color: #000000; }"
+    "treeview { background-color: #ffffff; color: #000000; }"
+    "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+    "textview { background-color: #ffffff; color: #000000; }";
+
+const char *dark_theme_css = "window { background-color: #1e1e1e; }"
+    "label { color: #c0c0c0; }"
+    "button { background-color: #2a2a2a; color: #c0c0c0; }"
+    "button:hover { background-color: #3a3a3a; }"
+    "entry { background-color: #2a2a2a; color: #c0c0c0; }"
+    "combobox { color: #c0c0c0; }"
+    "treeview { background-color: #1a1a1a; color: #c0c0c0; }"
+    "treeview:selected { background-color: #3a3a3a; }"
+    "textview { background-color: #000000; color: #00ff00; }";
 
 
 // Auto execution
@@ -890,6 +912,8 @@ void update_resource_list();
 void append_to_console(const char *text);
 void redirect_stdout();
 static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointer data);
+//dark mode
+void toggle_theme(GtkButton *button, gpointer user_data);
 
 // Pipe for stdout redirection
 int pipefd[2];
@@ -1032,6 +1056,7 @@ void on_quantum_changed(GtkSpinButton *spin_button, gpointer data) {
     round_robin_quantum = gtk_spin_button_get_value_as_int(spin_button);
     console_printf("[Clock: %d] Round Robin quantum set to %d\n", system_clock, round_robin_quantum);
 }
+
 
 // Update all GUI components
 // void update_gui() {
@@ -1488,7 +1513,7 @@ void create_gui() {
     gtk_widget_set_sensitive(quantum_spinner, FALSE);
     
     gtk_grid_attach(GTK_GRID(sidebar), scheduler_frame, 0, 1, 1, 1);
-    
+
     // Create simulation controls
     GtkWidget *control_frame = gtk_frame_new("Controls");
     GtkWidget *control_grid = gtk_grid_new();
@@ -1511,6 +1536,11 @@ void create_gui() {
     add_process_button = gtk_button_new_with_label("Add Process");
     g_signal_connect(add_process_button, "clicked", G_CALLBACK(on_add_process_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), add_process_button, 0, 3, 1, 1);
+    
+    // Add theme button
+    theme_button = gtk_button_new_with_label("Dark Mode");
+    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);
+    gtk_grid_attach(GTK_GRID(control_grid), theme_button, 0, 4, 1, 1);
     
     gtk_grid_attach(GTK_GRID(sidebar), control_frame, 0, 2, 1, 1);
     
@@ -1802,7 +1832,22 @@ void create_gui() {
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
 
 }
-
+//dark mode
+void toggle_theme(GtkButton *button, gpointer user_data) {
+    dark_mode = !dark_mode;
+    
+    // Update button label
+    gtk_button_set_label(GTK_BUTTON(theme_button), 
+                        dark_mode ? "Light Mode" : "Dark Mode");
+    
+    // Apply appropriate theme
+    gtk_css_provider_load_from_data(provider,
+        dark_mode ? dark_theme_css : light_theme_css, -1, NULL);
+    
+    console_printf("[Clock: %d] Switched to %s theme\n", 
+                  system_clock, 
+                  dark_mode ? "dark" : "light");
+}
 // Function to draw process icons
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
     int idx = GPOINTER_TO_INT(data);
