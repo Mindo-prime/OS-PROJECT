@@ -199,7 +199,6 @@ void sem_wait_resource(char *name) {
      if (mutexes[idx].value < 0) {
         printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
-        current_process.program_counter--;
         sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
     } else {
         mutexes[idx].value=-1;
@@ -513,7 +512,7 @@ void schedule() {
                 int offset = current_process.lower_bound;
                 sprintf(memory[offset + 2].value, "%d", current_process.priority);
             }
-            int src_priority = program_done ? 3 : current_process.priority;
+            int src_priority = program_done || is_current_process_blocked ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
             if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
