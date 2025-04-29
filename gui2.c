@@ -237,8 +237,7 @@ void sem_wait_resource(char *name) {
      if (mutexes[idx].value < 0) {
         console_printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
-        current_process.program_counter--;
-        sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
+        
     } else {
         mutexes[idx].value=-1;
         console_printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
@@ -257,8 +256,12 @@ void sem_signal_resource(char *name) {
    
     console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
     if (mutexes[idx].value <= 0) {
-        unblock_process(idx);
-        mutexes[idx].value=1;
+        if (blocked_queue[idx].size ==0) {
+            mutexes[idx].value=1;
+        }else{
+            unblock_process(idx);
+        }
+        
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     
