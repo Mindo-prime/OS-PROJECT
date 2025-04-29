@@ -77,7 +77,7 @@ int system_clock = 1;
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
 int MY_clock = 0;
-int is_current_process_blocked = 0;
+int programs_terminated = 0;
 int programs_size = 4;
 int process_count = 0;
 int total_programs = 0;
@@ -157,6 +157,7 @@ int get_enqueue_priority(int priority) {
     }
     return priority;
 }
+
 void block_process(int mutex_index){
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
         fprintf(stderr, "[Clock: %d] block_process: invalid mutex index %d\n", system_clock, mutex_index);
@@ -168,10 +169,9 @@ void block_process(int mutex_index){
         current_process.state = BLOCKED;
         int enqueue_priority = get_enqueue_priority(current_process.priority);
         enqueue(&blocked_queue[mutex_index], current_process.lower_bound, enqueue_priority);
-        is_current_process_blocked = 1;
-
    }
 }
+
 void unblock_process(int mutex_index) {
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
         fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
@@ -199,7 +199,6 @@ void sem_wait_resource(char *name) {
      if (mutexes[idx].value < 0) {
         printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
-        sprintf(memory[current_process.lower_bound + 3].value, "%d", current_process.program_counter);
     } else {
         mutexes[idx].value=-1;
         printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
@@ -217,13 +216,11 @@ void sem_signal_resource(char *name) {
     }
     printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
 
-    if (mutexes[idx].value <= 0) {
-        unblock_process(idx);
+    if (blocked_queue[idx].size > 0) {
+        unblock_process(idx);        
+    } else {
         mutexes[idx].value=1;
-        //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
-    
-   
 }
 
 int find_variable(char *name) {
@@ -465,7 +462,7 @@ void switch_context(queue* src, queue* dest) {
         if (current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB) {
             strcpy(memory[offset + 1].value, "TERMINATED");
             current_process.process_id = -1;
-        } else if (!is_current_process_blocked) {
+        } else {
             strcpy(memory[offset + 1].value, "READY");
             push(dest, current_process.lower_bound);
         }
@@ -490,40 +487,40 @@ queue* find_src(int priority) {
 }
 
 void schedule() {
-    char program_done = current_process.process_id == -1 || current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
+    char invalid_process = current_process.process_id == -1;
     switch(scheduling) {
         case ROUND_ROBIN:
-            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
+            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || invalid_process) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
-            if (quantum_tracking == round_robin_quantum || program_done || is_current_process_blocked) {
+            if (quantum_tracking == round_robin_quantum || invalid_process) {
                 quantum_tracking = 0;
             }
             break;
         case FIFO:
-            if (program_done) {
+            if (invalid_process) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
             break;
         case MLFQ:{
             int mlfq_quantum = 1 << (current_process.priority);
-            if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
+            if (!invalid_process && quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
                 int offset = current_process.lower_bound;
                 sprintf(memory[offset + 2].value, "%d", current_process.priority);
             }
-            int src_priority = program_done || is_current_process_blocked ? 3 : current_process.priority;
+            int src_priority = invalid_process ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
-            if (src->size > 0 && quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
+            if (src->size > 0 && quantum_tracking == mlfq_quantum || invalid_process) {
                 switch_context(src, dest);
             }
-            if (quantum_tracking == mlfq_quantum || program_done || is_current_process_blocked) {
+            if (quantum_tracking == mlfq_quantum || invalid_process) {
                 quantum_tracking = 0;
             }
-            break;}
+            break;
+        }
     }
-    is_current_process_blocked = 0;
 }
 
 int create_process(const char *program) {
@@ -643,16 +640,21 @@ void run_clock_cycle() {
         system_clock++;
         return;
     }
-   
+    int offset = current_process.lower_bound;
     execute_line(memory[current_process.program_counter].value); 
     current_process.program_counter++;
+    sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
+
     char program_done = current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     if (program_done) {
         printf("[Clock: %d] Process %d terminated\n", system_clock, current_process.process_id);
+        strcpy(memory[offset + 1].value, "TERMINATED");
+        current_process.process_id = -1;
+        programs_terminated++;
+    } else if (current_process.state == BLOCKED) {
+        current_process.process_id = -1;
     }
 
-    int offset = current_process.lower_bound;
-    sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
     #ifdef TEST_MODE
         printf("------------TestMode Statistics----------------\n");
         print_memory();     
@@ -735,11 +737,8 @@ int main(void) {
 
     qsort(programs, total_programs, sizeof(program), compare);
     print_memory();
-    while (1) {
+    while (programs_terminated < total_programs) {
         run_clock_cycle();
-        if (current_process.process_id == -1 && program_index == total_programs) {
-            break;
-        }
     }
     
     printf("[Clock: %d] All processes completed\n", system_clock);
