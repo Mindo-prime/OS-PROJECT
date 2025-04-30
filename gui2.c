@@ -630,8 +630,8 @@ void schedule() {
             }
             break;
         case MLFQ:{
-            int mlfq_quantum = 1 << current_process.priority;
-            if ((!invalid_program || current_process.state == BLOCKED) && quantum_tracking == mlfq_quantum && current_process.priority < 3) {
+            int mlfq_quantum = 1 << (current_process.priority);
+            if (quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
                 int offset = current_process.lower_bound;
                 sprintf(memory[offset + 2].value, "%d", current_process.priority);
