@@ -1,4 +1,4 @@
-//gcc gui2.c queue.c PriorityQueue.c -o gui2 `pkg-config --cflags --libs gtk+-3.0` -lfontconfig
+//gcc gui2.c queue.c PriorityQueue.c -o gui2 `pkg-config --cflags --libs gtk+-3.0` -lfontconfig -lm
 #include <gtk/gtk.h>
 #include <pango/pango.h>
 #include <stdlib.h>
@@ -50,6 +50,7 @@ GtkWidget *scheduler_combo;
 GtkWidget *quantum_spinner;
 GtkWidget *step_button;
 GtkWidget *auto_button;
+GtkWidget *auto_icon;
 GtkWidget *reset_button;
 GtkWidget *add_process_button;
 GtkWidget *add_process_dialog;
@@ -1023,6 +1024,7 @@ void on_auto_button_clicked(GtkWidget *widget, gpointer data) {
             auto_timeout_id = 0;
         }
     }
+
 }
 
 void on_reset_button_clicked(GtkWidget *widget, gpointer data) {
@@ -1492,7 +1494,124 @@ static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointe
     
     return TRUE;
 }
+//simlutaion control icons
+gboolean draw_step_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw step icon (right arrow)
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_move_to(cr, width * 0.2, height * 0.2);
+    cairo_line_to(cr, width * 0.8, height * 0.5);
+    cairo_line_to(cr, width * 0.2, height * 0.8);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    return FALSE;
+}
 
+gboolean draw_auto_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    if (auto_execution) {
+        // Draw stop icon (square) when auto is running
+        cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        cairo_rectangle(cr, width * 0.2, height * 0.2, width * 0.6, height * 0.6);
+        cairo_fill(cr);
+    } else {
+        // Draw play icon (double arrow) when auto is stopped
+        cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        cairo_move_to(cr, width * 0.1, height * 0.2);
+        cairo_line_to(cr, width * 0.4, height * 0.5);
+        cairo_line_to(cr, width * 0.1, height * 0.8);
+        cairo_move_to(cr, width * 0.5, height * 0.2);
+        cairo_line_to(cr, width * 0.8, height * 0.5);
+        cairo_line_to(cr, width * 0.5, height * 0.8);
+        cairo_fill(cr);
+    }
+    return FALSE;
+}
+
+gboolean draw_reset_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw reset icon (circular arrow)
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_arc(cr, width/2, height/2, width * 0.3, 0, 2 * M_PI);
+    cairo_stroke(cr);
+    
+    // Draw arrow head
+    cairo_move_to(cr, width * 0.7, height * 0.5);
+    cairo_line_to(cr, width * 0.6, height * 0.3);
+    cairo_line_to(cr, width * 0.8, height * 0.3);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    return FALSE;
+}
+
+gboolean draw_add_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw plus icon
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_set_line_width(cr, 2.0);
+    
+    // Vertical line
+    cairo_move_to(cr, width * 0.5, height * 0.2);
+    cairo_line_to(cr, width * 0.5, height * 0.8);
+    
+    // Horizontal line
+    cairo_move_to(cr, width * 0.2, height * 0.5);
+    cairo_line_to(cr, width * 0.8, height * 0.5);
+    
+    cairo_stroke(cr);
+    
+    return FALSE;
+}
+gboolean draw_theme_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Use different colors based on theme
+    if (dark_mode) {
+        // Light colors for dark mode
+        cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);  // Lighter gray
+        
+        // Sun icon
+        cairo_arc(cr, width * 0.5, height * 0.5, width * 0.25, 0, 2 * M_PI);
+        cairo_fill(cr);
+        
+        // Sun rays
+        cairo_set_line_width(cr, 2.0);
+        for (int i = 0; i < 8; i++) {
+            double angle = i * M_PI / 4;
+            cairo_move_to(cr, 
+                width * 0.5 + cos(angle) * width * 0.3,
+                height * 0.5 + sin(angle) * height * 0.3);
+            cairo_line_to(cr,
+                width * 0.5 + cos(angle) * width * 0.4,
+                height * 0.5 + sin(angle) * height * 0.4);
+        }
+        cairo_stroke(cr);
+    } else {
+        // Dark colors for light mode
+        cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);  // Darker gray
+        
+        // Moon icon
+        cairo_arc(cr, width * 0.5, height * 0.5, width * 0.3, 0, 2 * M_PI);
+        cairo_fill(cr);
+        
+        cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);  // Darker overlay
+        cairo_arc(cr, width * 0.65, height * 0.5, width * 0.3, 0, 2 * M_PI);
+        cairo_fill(cr);
+    }
+    
+    return FALSE;
+}
 // Create GUI
 void create_gui() {
     // Create window
@@ -1593,34 +1712,77 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), scheduler_frame, 0, 1, 1, 1);
 
-    // Create simulation controls
+    // Create simulation controls with icons
     GtkWidget *control_frame = gtk_frame_new("Controls");
     GtkWidget *control_grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(control_grid), 10);
     gtk_container_set_border_width(GTK_CONTAINER(control_grid), 10);
     gtk_container_add(GTK_CONTAINER(control_frame), control_grid);
     
-    step_button = gtk_button_new_with_label("Step");
+    // Step button with icon
+    GtkWidget *step_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    step_button = gtk_button_new();
+    GtkWidget *step_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(step_icon, 24, 24);
+    g_signal_connect(step_icon, "draw", G_CALLBACK(draw_step_icon), NULL);
+    GtkWidget *step_label = gtk_label_new("Step");
+    gtk_box_pack_start(GTK_BOX(step_box), step_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(step_box), step_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(step_button), step_box);
     g_signal_connect(step_button, "clicked", G_CALLBACK(on_step_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), step_button, 0, 0, 1, 1);
     
-    auto_button = gtk_button_new_with_label("Start Auto");
+    // Auto button with icon
+    GtkWidget *auto_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    auto_button = gtk_button_new();
+    auto_icon = gtk_drawing_area_new();  // Make this global
+    gtk_widget_set_size_request(auto_icon, 24, 24);
+    g_signal_connect(auto_icon, "draw", G_CALLBACK(draw_auto_icon), NULL);
+    GtkWidget *auto_label = gtk_label_new("Start Auto");
+    gtk_box_pack_start(GTK_BOX(auto_box), auto_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(auto_box), auto_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(auto_button), auto_box);
     g_signal_connect(auto_button, "clicked", G_CALLBACK(on_auto_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), auto_button, 0, 1, 1, 1);
     
-    reset_button = gtk_button_new_with_label("Reset");
+    // Reset button with icon
+    GtkWidget *reset_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    reset_button = gtk_button_new();
+    GtkWidget *reset_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(reset_icon, 24, 24);
+    g_signal_connect(reset_icon, "draw", G_CALLBACK(draw_reset_icon), NULL);
+    GtkWidget *reset_label = gtk_label_new("Reset");
+    gtk_box_pack_start(GTK_BOX(reset_box), reset_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(reset_box), reset_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(reset_button), reset_box);
     g_signal_connect(reset_button, "clicked", G_CALLBACK(on_reset_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), reset_button, 0, 2, 1, 1);
     
-    add_process_button = gtk_button_new_with_label("Add Process");
+    // Add Process button with icon
+    GtkWidget *add_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    add_process_button = gtk_button_new();
+    GtkWidget *add_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(add_icon, 24, 24);
+    g_signal_connect(add_icon, "draw", G_CALLBACK(draw_add_icon), NULL);
+    GtkWidget *add_label = gtk_label_new("Add Process");
+    gtk_box_pack_start(GTK_BOX(add_box), add_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(add_box), add_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(add_process_button), add_box);
     g_signal_connect(add_process_button, "clicked", G_CALLBACK(on_add_process_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), add_process_button, 0, 3, 1, 1);
-    
-    // Add theme button
-    theme_button = gtk_button_new_with_label("Light Mode");
-    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);
+    // Theme button
+    GtkWidget *theme_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    theme_button = gtk_button_new();
+    GtkWidget *theme_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(theme_icon, 24, 24);
+    g_signal_connect(theme_icon, "draw", G_CALLBACK(draw_theme_icon), NULL);
+    GtkWidget *theme_label = gtk_label_new("Light Mode");
+    gtk_box_pack_start(GTK_BOX(theme_box), theme_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(theme_box), theme_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(theme_button), theme_box);
+    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);  // Add this line
     gtk_grid_attach(GTK_GRID(control_grid), theme_button, 0, 4, 1, 1);
-    
+
     gtk_grid_attach(GTK_GRID(sidebar), control_frame, 0, 2, 1, 1);
     
     // Create memory view
@@ -2100,11 +2262,46 @@ void toggle_theme(GtkButton *button, gpointer user_data) {
     dark_mode = !dark_mode;
     
     // Update button label
-    gtk_button_set_label(GTK_BUTTON(theme_button), 
-                        dark_mode ? "Light Mode" : "Dark Mode");
+    GtkWidget *theme_box = gtk_bin_get_child(GTK_BIN(theme_button));
+    GtkWidget *theme_label = NULL;
+    
+    // Find the label widget in the box
+    GList *children = gtk_container_get_children(GTK_CONTAINER(theme_box));
+    while (children != NULL) {
+        GtkWidget *child = children->data;
+        if (GTK_IS_LABEL(child)) {
+            theme_label = child;
+            break;
+        }
+        children = children->next;
+    }
+    g_list_free(children);
+    
+    // Update the label text based on current mode
+    if (theme_label) {
+        gtk_label_set_text(GTK_LABEL(theme_label), dark_mode ? "Light Mode" : "Dark Mode");
+    }
+    
+    // Find the drawing area for the icon
+    GtkWidget *theme_icon = NULL;
+    children = gtk_container_get_children(GTK_CONTAINER(theme_box));
+    while (children != NULL) {
+        GtkWidget *child = children->data;
+        if (GTK_IS_DRAWING_AREA(child)) {
+            theme_icon = child;
+            break;
+        }
+        children = children->next;
+    }
+    g_list_free(children);
+    
+    // Redraw the icon if found
+    if (theme_icon) {
+        gtk_widget_queue_draw(theme_icon);
+    }
     
     // Create CSS with consistent font sizes
-    const char *theme_css = dark_mode ? 
+    const char *theme_css = dark_mode ?
         "window { background-color: #1e1e1e; }"
         "label { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
         "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
@@ -2116,7 +2313,6 @@ void toggle_theme(GtkButton *button, gpointer user_data) {
         "treeview:selected { background-color: #3a3a3a; }"
         "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
         "textview text { font-size: 14px !important; }" :
-        
         "window { background-color: #ffffff; }"
         "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
         "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
@@ -2142,9 +2338,9 @@ void toggle_theme(GtkButton *button, gpointer user_data) {
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(console_provider);
     
-    console_printf("[Clock: %d] Switched to %s theme\n", 
-                  system_clock, 
-                  dark_mode ? "dark" : "light");
+    console_printf("[Clock: %d] Switched to %s theme\n",
+        system_clock,
+        dark_mode ? "dark" : "light");
 }
 // Function to draw process icons
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
