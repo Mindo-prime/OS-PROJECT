@@ -1,4 +1,4 @@
-//gcc gui2.c queue.c PriorityQueue.c -o gui2 `pkg-config --cflags --libs gtk+-3.0` -lfontconfig
+//gcc gui2.c queue.c PriorityQueue.c -o gui2 `pkg-config --cflags --libs gtk+-3.0` -lfontconfig -lm
 #include <gtk/gtk.h>
 #include <pango/pango.h>
 #include <stdlib.h>
@@ -50,6 +50,7 @@ GtkWidget *scheduler_combo;
 GtkWidget *quantum_spinner;
 GtkWidget *step_button;
 GtkWidget *auto_button;
+GtkWidget *auto_icon;
 GtkWidget *reset_button;
 GtkWidget *add_process_button;
 GtkWidget *add_process_dialog;
@@ -57,7 +58,7 @@ GtkWidget *arrival_time_entry;
 GtkWidget *program_name_entry;
 GtkWidget *add_process_entry;
 //dark mode
-gboolean dark_mode = FALSE;
+gboolean dark_mode = TRUE;
 GtkWidget *theme_button;
 //tabs
 GtkWidget *memory_list_tab;
@@ -153,7 +154,8 @@ void console_printf(const char *format, ...);
 
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
-int programs_terminated = 0;
+int MY_clock = 0;
+int is_current_process_blocked = 0;
 int programs_size = 4;
 int process_count = 0;
 int total_programs = 0;
@@ -194,7 +196,6 @@ int get_enqueue_priority(int priority) {
     }
     return priority;
 }
-
 void block_process(int mutex_index){
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
         fprintf(stderr, "[Clock: %d] block_process: invalid mutex index %d\n", system_clock, mutex_index);
@@ -206,22 +207,27 @@ void block_process(int mutex_index){
         current_process.state = BLOCKED;
         int enqueue_priority = get_enqueue_priority(current_process.priority);
         enqueue(&blocked_queue[mutex_index], current_process.lower_bound, enqueue_priority);
+        is_current_process_blocked = 1;
+
    }
 }
-
 void unblock_process(int mutex_index) {
     if (mutex_index < 0 || mutex_index >= MAX_MUTEXES) {
         fprintf(stderr, "[Clock: %d] unblock_process: invalid mutex index %d\n", system_clock, mutex_index);
         return;
     }
-    PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
-    console_printf("[Clock: %d] Process %d: Unblocked\n", system_clock, unblocked_process.process_id);
-    int offset = unblocked_process.lower_bound;
-    strcpy(memory[offset + 1].value, "READY");
-    push(&ready_queue[unblocked_process.priority], unblocked_process.lower_bound);
+    if (blocked_queue[mutex_index].size > 0) {
+        PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
+        console_printf("[Clock: %d] Process %d unblocked\n", system_clock, unblocked_process.process_id);
+        int offset = unblocked_process.lower_bound;
+        strcpy(memory[offset + 1].value, "READY");
+        //printf("changed address %d to READY\n", offset + 1);
+        push(&ready_queue[unblocked_process.priority], unblocked_process.lower_bound);
+    } 
 }
 
 void sem_wait_resource(char *name) {
+    
     trim(name);
     int idx = find_mutex(name);
     if (idx < 0) {
@@ -229,13 +235,16 @@ void sem_wait_resource(char *name) {
         return;
     }
     
-     if (mutexes[idx].value <= 0) {
-        console_printf("[Clock: %d] Process %d: Blocked, Resource %s unavailable\n", system_clock, current_process.process_id, name);
+     if (mutexes[idx].value < 0) {
+        console_printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
+        
     } else {
-        mutexes[idx].value = 0;
-        console_printf("[Clock: %d] Process %d: Resource %s acquired\n", system_clock, current_process.process_id, name);
-    }    
+        mutexes[idx].value=-1;
+        console_printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
+        //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
+    }
+    
 }
 
 void sem_signal_resource(char *name) {    
@@ -246,13 +255,21 @@ void sem_signal_resource(char *name) {
         return;
     }
    
-    console_printf("[Clock: %d] Process %d: Resource %s released\n", system_clock, current_process.process_id, name);
-    if (blocked_queue[idx].size > 0) {
-        unblock_process(idx);
-    } else {
-        mutexes[idx].value=1;
+    console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
+    if (mutexes[idx].value <= 0) {
+        if (blocked_queue[idx].size ==0) {
+            mutexes[idx].value=1;
+        }else{
+            unblock_process(idx);
+        }
+        
+        //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
+    
+   
 }
+
+
 
 int find_variable(char *name) {
     int offset = NUM_PCB + current_process.code_size;
@@ -360,7 +377,7 @@ void process_assign(char *args) {
             "Process %d: Enter value for %s:",
             current_process.process_id, name);
         
-        console_printf("[Clock: %d] Process %d: Value of variable %s taken from user\n", system_clock, current_process.process_id, name);
+        console_printf("[Clock: %d] Process %d: Value of %s taken\n", system_clock, current_process.process_id, name);
         GtkWidget *entry = gtk_entry_new();
         gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), entry);
         gtk_widget_show_all(dialog);
@@ -545,16 +562,25 @@ void switch_context(queue* src, queue* dest) {
    #ifdef TEST_MODE
      printf("--------switching context--------\n");
     #endif
-    int offset = current_process.lower_bound;
+     int offset = current_process.lower_bound;
+    
     if (current_process.process_id != -1) {
-        strcpy(memory[offset + 1].value, "READY");
-        push(dest, current_process.lower_bound);
+        if (current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB) {
+            strcpy(memory[offset + 1].value, "TERMINATED");
+            current_process.process_id = -1;
+        } else if (!is_current_process_blocked) {
+            strcpy(memory[offset + 1].value, "READY");
+            push(dest, current_process.lower_bound);
+        }
     }
     if (src->size > 0) {
         current_process = load_PCB(pop(src));
         offset = current_process.lower_bound;
         strcpy(memory[offset + 1].value, "RUNNING");
     }
+    
+    
+    
 }
 
 queue* find_src(int priority) {
@@ -588,13 +614,13 @@ void print_memory() {
 }
 
 void schedule() {
-    char invalid_program = current_process.process_id == -1;
+    char invalid_program = current_process.process_id == -1 || current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     switch(scheduling) {
         case ROUND_ROBIN:
-            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || invalid_program) {
+            if (ready_queue[0].size > 0 && quantum_tracking == round_robin_quantum || invalid_program || is_current_process_blocked) {
                 switch_context(&ready_queue[0], &ready_queue[0]);
             }
-            if (quantum_tracking == round_robin_quantum || invalid_program) {
+            if (quantum_tracking == round_robin_quantum || invalid_program || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
             break;
@@ -604,7 +630,7 @@ void schedule() {
             }
             break;
         case MLFQ:{
-            int mlfq_quantum = 1 << current_process.priority;
+            int mlfq_quantum = 1 << (current_process.priority);
             if ((!invalid_program || current_process.state == BLOCKED) && quantum_tracking == mlfq_quantum && current_process.priority < 3) {
                 current_process.priority++;
                 int offset = current_process.lower_bound;
@@ -613,15 +639,16 @@ void schedule() {
             int src_priority = invalid_program ? 3 : current_process.priority;
             queue* src = find_src(src_priority);
             queue* dest = &ready_queue[current_process.priority];
-            if (src->size > 0 && quantum_tracking == mlfq_quantum || invalid_program) {
+            if (src->size > 0 && quantum_tracking == mlfq_quantum || invalid_program || is_current_process_blocked) {
                 switch_context(src, dest);
             }
-            if (quantum_tracking == mlfq_quantum || invalid_program) {
+            if (quantum_tracking == mlfq_quantum || invalid_program || is_current_process_blocked) {
                 quantum_tracking = 0;
             }
             break;
         }
     }
+    is_current_process_blocked = 0;
 }
 
 
@@ -638,30 +665,23 @@ void run_clock_cycle() {
     
     schedule();
    
-    if (programs_terminated == total_programs) {
-        return;
-    }
-
     if (current_process.process_id == -1) {
+        if (program_index == total_programs) {
+            return;
+        }
         console_printf("[Clock: %d] Idle\n", system_clock);
         system_clock++;
         return;
     }
-    int offset = current_process.lower_bound;
+   
     execute_line(memory[current_process.program_counter].value); 
     current_process.program_counter++;
-    sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
-
     char program_done = current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     if (program_done) {
-        console_printf("[Clock: %d] Process %d: Terminated\n", system_clock, current_process.process_id);
-        strcpy(memory[offset + 1].value, "TERMINATED");
-        current_process.process_id = -1;
-        programs_terminated++;
-    } else if (current_process.state == BLOCKED) {
-        current_process.process_id = -1;
+        console_printf("[Clock: %d] Process %d terminated\n", system_clock, current_process.process_id);
     }
-
+    int offset = current_process.lower_bound;
+    sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
     #ifdef TEST_MODE
         printf("------------TestMode Statistics----------------\n");
         print_memory();
@@ -694,18 +714,15 @@ void run_clock_cycle() {
 int create_process(const char *program) {
     if (process_count >= MAX_PROCESSES) {
         console_printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
-        total_programs--;
         return -1;
     }
     if (memory_allocated >= MEMORY_SIZE){
         console_printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
-        total_programs--;
         return -1;
     }
     FILE *fptr = fopen(program,"r");
     if (fptr == NULL) {
-        printf("[Clock: %d] Error: Wrong file name %s\n", system_clock, program);
-        total_programs--;
+        printf("[Clock: %d] Error: Dumb ass wrong file name %s\n", system_clock, program);
         return -1;
     }
     int line_count = 0;
@@ -717,7 +734,6 @@ int create_process(const char *program) {
     }
     if (memory_allocated + line_count + NUM_PCB + MAX_VARS_PER  > MEMORY_SIZE) {
         console_printf("[Clock: %d] Error: Not enough memory for process\n", system_clock);
-        total_programs--;
         fclose(fptr);
         return -1;
     }
@@ -876,25 +892,25 @@ extern int program_index;
 extern int total_programs;
 extern program programs[MAX_PROCESSES];
 
-const char *light_theme_css = "window { background-color: #ffffff; }"
-    "label { color: #000000; }"
-    "button { background-color: #e0e0e0; color: #000000; }"
-    "button:hover { background-color: #d0d0d0; }"
-    "entry { background-color: #ffffff; color: #000000; }"
-    "combobox { color: #000000; }"
-    "treeview { background-color: #ffffff; color: #000000; }"
-    "treeview:selected { background-color: #0077cc; color: #ffffff; }"
-    "textview { background-color: #ffffff; color: #000000; }";
+// const char *light_theme_css = "window { background-color: #ffffff; }"
+//     "label { color: #000000; }"
+//     "button { background-color: #e0e0e0; color: #000000; }"
+//     "button:hover { background-color: #d0d0d0; }"
+//     "entry { background-color: #ffffff; color: #000000; }"
+//     "combobox { color: #000000; }"
+//     "treeview { background-color: #ffffff; color: #000000; }"
+//     "treeview:selected { background-color: #0077cc; color: #ffffff; }"
+//     "textview { background-color: #ffffff; color: #000000; }";
 
-const char *dark_theme_css = "window { background-color: #1e1e1e; }"
-    "label { color: #c0c0c0; }"
-    "button { background-color: #2a2a2a; color: #c0c0c0; }"
-    "button:hover { background-color: #3a3a3a; }"
-    "entry { background-color: #2a2a2a; color: #c0c0c0; }"
-    "combobox { color: #c0c0c0; }"
-    "treeview { background-color: #1a1a1a; color: #c0c0c0; }"
-    "treeview:selected { background-color: #3a3a3a; }"
-    "textview { background-color: #000000; color: #00ff00; }";
+// const char *dark_theme_css = "window { background-color: #1e1e1e; }"
+//     "label { color: #c0c0c0; }"
+//     "button { background-color: #2a2a2a; color: #c0c0c0; }"
+//     "button:hover { background-color: #3a3a3a; }"
+//     "entry { background-color: #2a2a2a; color: #c0c0c0; }"
+//     "combobox { color: #c0c0c0; }"
+//     "treeview { background-color: #1a1a1a; color: #c0c0c0; }"
+//     "treeview:selected { background-color: #3a3a3a; }"
+//     "textview { background-color: #000000; color: #00ff00; }";
 
 
 // Auto execution
@@ -966,7 +982,7 @@ void step_simulation() {
     update_gui();
     
     // Check if simulation is complete
-    if (programs_terminated == total_programs) {
+    if (current_process.process_id == -1 && program_index == total_programs) {
         console_printf("[Clock: %d] All processes completed\n", system_clock);
         if (auto_execution) {
             g_source_remove(auto_timeout_id);
@@ -1008,6 +1024,7 @@ void on_auto_button_clicked(GtkWidget *widget, gpointer data) {
             auto_timeout_id = 0;
         }
     }
+
 }
 
 void on_reset_button_clicked(GtkWidget *widget, gpointer data) {
@@ -1118,9 +1135,10 @@ void reset_simulation() {
 
 //test
 GtkWidget *load_button;
-char *on_load_clicked(GtkButton *button, gpointer user_data) {
+char* on_load_clicked(GtkButton *button, gpointer user_data) {
     GtkWidget *dialog;
     GtkFileFilter *filter;
+    static char* selected_filename = NULL;  // Static to persist after function returns
     
     dialog = gtk_file_chooser_dialog_new("Open Program File",
                                         GTK_WINDOW(window),
@@ -1135,26 +1153,24 @@ char *on_load_clicked(GtkButton *button, gpointer user_data) {
     gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
     
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        char *filename;
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        
-        // Create process with the selected file
-        int pid = create_process(filename);
-        if (pid > 0) {
-            console_printf("[Clock: %d] Added program \"%s\"\n", 
-                system_clock, filename);
-        } else {
-            console_printf("[Clock: %d] Failed to add program \"%s\"\n", 
-                system_clock, filename);
+        if (selected_filename) {
+            g_free(selected_filename);
         }
-        
-        //g_free(filename);
-
-        update_gui();
-        
+        selected_filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
     }
     
     gtk_widget_destroy(dialog);
+    return selected_filename;
+}
+
+static void on_load_button_clicked(GtkButton *button, gpointer user_data);
+gboolean draw_file_icon(GtkWidget *widget, cairo_t *cr, gpointer data);
+static void on_load_button_clicked(GtkButton *button, gpointer user_data) {
+    GtkEntry *entry = GTK_ENTRY(user_data);
+    char *filename = on_load_clicked(button, NULL);
+    if (filename) {
+        gtk_entry_set_text(entry, filename);
+    }
 }
 
 // Add process dialog
@@ -1164,13 +1180,13 @@ void show_add_process_dialog() {
     GtkWidget *grid;
     
     dialog = gtk_dialog_new_with_buttons("Add Process",
-                                       GTK_WINDOW(window),
-                                       GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                       "Cancel",
-                                       GTK_RESPONSE_CANCEL,
-                                       "Add",
-                                       GTK_RESPONSE_ACCEPT,
-                                       NULL);
+                                        GTK_WINDOW(window),
+                                        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                        "Cancel",
+                                        GTK_RESPONSE_CANCEL,
+                                        "Add",
+                                        GTK_RESPONSE_ACCEPT,
+                                        NULL);
     
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
     
@@ -1181,11 +1197,27 @@ void show_add_process_dialog() {
 
     // Create button box for load button
     GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-    load_button = gtk_button_new_with_label("Load Program");
-    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_clicked), NULL);
+
+    // Create a box for the icon and label
+    GtkWidget *load_button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    load_button = gtk_button_new();
+
+    // Create the icon
+    GtkWidget *file_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(file_icon, 24, 24);
+    g_signal_connect(file_icon, "draw", G_CALLBACK(draw_file_icon), NULL);
+
+    // Create the label
+    GtkWidget *button_label = gtk_label_new("Load Program");
+
+    // Pack icon and label into the button box
+    gtk_box_pack_start(GTK_BOX(load_button_box), file_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(load_button_box), button_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(load_button), load_button_box);
+
+    // Add the button to the main button box
     gtk_box_pack_start(GTK_BOX(button_box), load_button, FALSE, FALSE, 0);
     gtk_grid_attach(GTK_GRID(grid), button_box, 0, 0, 3, 1);
-
     // Program name
     GtkWidget *name_label = gtk_label_new("Program name:");
     gtk_widget_set_halign(name_label, GTK_ALIGN_START);
@@ -1204,7 +1236,11 @@ void show_add_process_dialog() {
     
     gtk_container_add(GTK_CONTAINER(content_area), grid);
     gtk_widget_show_all(dialog);
-    
+
+    // Modified load button callback
+    g_signal_connect(load_button, "clicked", G_CALLBACK(on_load_button_clicked), program_name_entry);
+
+
     int result = gtk_dialog_run(GTK_DIALOG(dialog));
     if (result == GTK_RESPONSE_ACCEPT) {
         const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
@@ -1227,7 +1263,36 @@ void show_add_process_dialog() {
     
     gtk_widget_destroy(dialog);
 }
-
+gboolean draw_file_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw file background
+    cairo_set_source_rgb(cr, 0.9, 0.9, 0.9);
+    cairo_rectangle(cr, width * 0.1, height * 0.1, width * 0.8, height * 0.8);
+    cairo_fill(cr);
+    
+    // Draw folded corner
+    cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);
+    cairo_move_to(cr, width * 0.6, height * 0.1);
+    cairo_line_to(cr, width * 0.9, height * 0.1);
+    cairo_line_to(cr, width * 0.9, height * 0.4);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    // Draw lines representing text
+    cairo_set_source_rgb(cr, 0.6, 0.6, 0.6);
+    cairo_set_line_width(cr, 1);
+    
+    // Draw three lines
+    for (int i = 0; i < 3; i++) {
+        cairo_move_to(cr, width * 0.2, height * (0.3 + i * 0.2));
+        cairo_line_to(cr, width * 0.8, height * (0.3 + i * 0.2));
+        cairo_stroke(cr);
+    }
+    
+    return FALSE;
+}
 // Add the process to the simulation
 void add_process_to_simulation() {
     const char *program_name = gtk_entry_get_text(GTK_ENTRY(program_name_entry));
@@ -1429,7 +1494,124 @@ static gboolean read_stdout(GIOChannel *channel, GIOCondition condition, gpointe
     
     return TRUE;
 }
+//simlutaion control icons
+gboolean draw_step_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw step icon (right arrow)
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_move_to(cr, width * 0.2, height * 0.2);
+    cairo_line_to(cr, width * 0.8, height * 0.5);
+    cairo_line_to(cr, width * 0.2, height * 0.8);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    return FALSE;
+}
 
+gboolean draw_auto_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    if (auto_execution) {
+        // Draw stop icon (square) when auto is running
+        cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        cairo_rectangle(cr, width * 0.2, height * 0.2, width * 0.6, height * 0.6);
+        cairo_fill(cr);
+    } else {
+        // Draw play icon (double arrow) when auto is stopped
+        cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        cairo_move_to(cr, width * 0.1, height * 0.2);
+        cairo_line_to(cr, width * 0.4, height * 0.5);
+        cairo_line_to(cr, width * 0.1, height * 0.8);
+        cairo_move_to(cr, width * 0.5, height * 0.2);
+        cairo_line_to(cr, width * 0.8, height * 0.5);
+        cairo_line_to(cr, width * 0.5, height * 0.8);
+        cairo_fill(cr);
+    }
+    return FALSE;
+}
+
+gboolean draw_reset_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw reset icon (circular arrow)
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_arc(cr, width/2, height/2, width * 0.3, 0, 2 * M_PI);
+    cairo_stroke(cr);
+    
+    // Draw arrow head
+    cairo_move_to(cr, width * 0.7, height * 0.5);
+    cairo_line_to(cr, width * 0.6, height * 0.3);
+    cairo_line_to(cr, width * 0.8, height * 0.3);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    
+    return FALSE;
+}
+
+gboolean draw_add_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Draw plus icon
+    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    cairo_set_line_width(cr, 2.0);
+    
+    // Vertical line
+    cairo_move_to(cr, width * 0.5, height * 0.2);
+    cairo_line_to(cr, width * 0.5, height * 0.8);
+    
+    // Horizontal line
+    cairo_move_to(cr, width * 0.2, height * 0.5);
+    cairo_line_to(cr, width * 0.8, height * 0.5);
+    
+    cairo_stroke(cr);
+    
+    return FALSE;
+}
+gboolean draw_theme_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    double width = gtk_widget_get_allocated_width(widget);
+    double height = gtk_widget_get_allocated_height(widget);
+    
+    // Use different colors based on theme
+    if (dark_mode) {
+        // Light colors for dark mode
+        cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);  // Lighter gray
+        
+        // Sun icon
+        cairo_arc(cr, width * 0.5, height * 0.5, width * 0.25, 0, 2 * M_PI);
+        cairo_fill(cr);
+        
+        // Sun rays
+        cairo_set_line_width(cr, 2.0);
+        for (int i = 0; i < 8; i++) {
+            double angle = i * M_PI / 4;
+            cairo_move_to(cr, 
+                width * 0.5 + cos(angle) * width * 0.3,
+                height * 0.5 + sin(angle) * height * 0.3);
+            cairo_line_to(cr,
+                width * 0.5 + cos(angle) * width * 0.4,
+                height * 0.5 + sin(angle) * height * 0.4);
+        }
+        cairo_stroke(cr);
+    } else {
+        // Dark colors for light mode
+        cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);  // Darker gray
+        
+        // Moon icon
+        cairo_arc(cr, width * 0.5, height * 0.5, width * 0.3, 0, 2 * M_PI);
+        cairo_fill(cr);
+        
+        cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);  // Darker overlay
+        cairo_arc(cr, width * 0.65, height * 0.5, width * 0.3, 0, 2 * M_PI);
+        cairo_fill(cr);
+    }
+    
+    return FALSE;
+}
 // Create GUI
 void create_gui() {
     // Create window
@@ -1441,17 +1623,34 @@ void create_gui() {
     // Create CSS provider
     provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "window { background-color: #ffffff; }"
-        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button:hover { background-color: #d0d0d0; }"
-        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "window { background-color: #0d1117; }"
+        "frame { border-radius: 6px; border: 1px solid #30363d; margin: 5px; }"
+        "frame > label { color: #c9d1d9; background-color: #161b22; padding: 5px; }"
+        
+        "label { color: #c9d1d9; font-family: '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', sans-serif; font-size: 14px !important; }"
+        
+        "button { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px 12px; font-weight: 500; }"
+        "button:hover { background-color: #30363d; border-color: #8b949e; }"
+        "button:active { background-color: #282e33; }"
+        
+        "entry { background-color: #010409; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px; }"
+        "entry:focus { border-color: #1f6feb; }"
+        
+        "combobox { color: #c9d1d9; border-radius: 6px; border: 1px solid #30363d; background-color: #21262d; }"
+        "combobox:hover { border-color: #8b949e; }"
         "combobox * { font-size: 14px !important; }"
-        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
-        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "textview text { font-size: 14px !important; }"
+        "combobox button { border: none; }"
+        
+        "treeview { background-color: #0d1117; color: #c9d1d9; border: 1px solid #30363d; }"
+        "treeview:selected { background-color: #1f6feb; color: #ffffff; }"
+        "treeview header button { background-color: #161b22; color: #c9d1d9; font-weight: 600; border-bottom: 1px solid #30363d; }"
+        
+        "scrollbar { background-color: #0d1117; border-radius: 10px; }"
+        "scrollbar slider { background-color: #6e7681; border-radius: 10px; min-width: 8px; min-height: 8px; }"
+        "scrollbar slider:hover { background-color: #6e7681; }"
+        
+        "textview { background-color: #0d1117; color: #58a6ff; border: 1px solid #30363d; border-radius: 6px; }"
+        "textview text { font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace; font-size: 14px !important; }" 
         , -1, NULL);
     
     gtk_style_context_add_provider_for_screen(
@@ -1460,7 +1659,7 @@ void create_gui() {
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
     );
     
-    // Create main grid
+    // Create main grid with expand properties
     main_grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(main_grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(main_grid), 10);
@@ -1530,34 +1729,77 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), scheduler_frame, 0, 1, 1, 1);
 
-    // Create simulation controls
+    // Create simulation controls with icons
     GtkWidget *control_frame = gtk_frame_new("Controls");
     GtkWidget *control_grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(control_grid), 10);
     gtk_container_set_border_width(GTK_CONTAINER(control_grid), 10);
     gtk_container_add(GTK_CONTAINER(control_frame), control_grid);
     
-    step_button = gtk_button_new_with_label("Step");
+    // Step button with icon
+    GtkWidget *step_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    step_button = gtk_button_new();
+    GtkWidget *step_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(step_icon, 24, 24);
+    g_signal_connect(step_icon, "draw", G_CALLBACK(draw_step_icon), NULL);
+    GtkWidget *step_label = gtk_label_new("Step");
+    gtk_box_pack_start(GTK_BOX(step_box), step_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(step_box), step_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(step_button), step_box);
     g_signal_connect(step_button, "clicked", G_CALLBACK(on_step_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), step_button, 0, 0, 1, 1);
     
-    auto_button = gtk_button_new_with_label("Start Auto");
+    // Auto button with icon
+    GtkWidget *auto_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    auto_button = gtk_button_new();
+    auto_icon = gtk_drawing_area_new();  // Make this global
+    gtk_widget_set_size_request(auto_icon, 24, 24);
+    g_signal_connect(auto_icon, "draw", G_CALLBACK(draw_auto_icon), NULL);
+    GtkWidget *auto_label = gtk_label_new("Start Auto");
+    gtk_box_pack_start(GTK_BOX(auto_box), auto_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(auto_box), auto_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(auto_button), auto_box);
     g_signal_connect(auto_button, "clicked", G_CALLBACK(on_auto_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), auto_button, 0, 1, 1, 1);
     
-    reset_button = gtk_button_new_with_label("Reset");
+    // Reset button with icon
+    GtkWidget *reset_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    reset_button = gtk_button_new();
+    GtkWidget *reset_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(reset_icon, 24, 24);
+    g_signal_connect(reset_icon, "draw", G_CALLBACK(draw_reset_icon), NULL);
+    GtkWidget *reset_label = gtk_label_new("Reset");
+    gtk_box_pack_start(GTK_BOX(reset_box), reset_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(reset_box), reset_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(reset_button), reset_box);
     g_signal_connect(reset_button, "clicked", G_CALLBACK(on_reset_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), reset_button, 0, 2, 1, 1);
     
-    add_process_button = gtk_button_new_with_label("Add Process");
+    // Add Process button with icon
+    GtkWidget *add_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    add_process_button = gtk_button_new();
+    GtkWidget *add_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(add_icon, 24, 24);
+    g_signal_connect(add_icon, "draw", G_CALLBACK(draw_add_icon), NULL);
+    GtkWidget *add_label = gtk_label_new("Add Process");
+    gtk_box_pack_start(GTK_BOX(add_box), add_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(add_box), add_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(add_process_button), add_box);
     g_signal_connect(add_process_button, "clicked", G_CALLBACK(on_add_process_button_clicked), NULL);
     gtk_grid_attach(GTK_GRID(control_grid), add_process_button, 0, 3, 1, 1);
-    
-    // Add theme button
-    theme_button = gtk_button_new_with_label("Dark Mode");
-    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);
+    // Theme button
+    GtkWidget *theme_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    theme_button = gtk_button_new();
+    GtkWidget *theme_icon = gtk_drawing_area_new();
+    gtk_widget_set_size_request(theme_icon, 24, 24);
+    g_signal_connect(theme_icon, "draw", G_CALLBACK(draw_theme_icon), NULL);
+    GtkWidget *theme_label = gtk_label_new("Light Mode");
+    gtk_box_pack_start(GTK_BOX(theme_box), theme_icon, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(theme_box), theme_label, FALSE, FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(theme_button), theme_box);
+    g_signal_connect(theme_button, "clicked", G_CALLBACK(toggle_theme), NULL);  // Add this line
     gtk_grid_attach(GTK_GRID(control_grid), theme_button, 0, 4, 1, 1);
-    
+
     gtk_grid_attach(GTK_GRID(sidebar), control_frame, 0, 2, 1, 1);
     
     // Create memory view
@@ -1601,7 +1843,6 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(memory_scroll), memory_list);
     gtk_container_add(GTK_CONTAINER(memory_frame), memory_scroll);
-    gtk_widget_set_size_request(memory_scroll, 500, 250);
     
     // Create process list
     GtkWidget *process_frame = gtk_frame_new("Processes");
@@ -1641,7 +1882,6 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(process_scroll), process_list);
     gtk_container_add(GTK_CONTAINER(process_frame), process_scroll);
-    gtk_widget_set_size_request(process_scroll, 500, 150);
     
     // Create queue lists
     GtkWidget *queue_frame = gtk_frame_new("Queues");
@@ -1680,8 +1920,11 @@ void create_gui() {
     gtk_tree_view_append_column(GTK_TREE_VIEW(ready_queue_list), column);
     
     gtk_container_add(GTK_CONTAINER(ready_scroll), ready_queue_list);
-    gtk_widget_set_size_request(ready_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), ready_scroll, 0, 1, 1, 1);
+    
+    // Set ready queue to expand
+    gtk_widget_set_hexpand(ready_scroll, TRUE);
+    gtk_widget_set_vexpand(ready_scroll, TRUE);
     
     // Blocked queue
     GtkWidget *blocked_label = gtk_label_new("Blocked Queue");
@@ -1712,8 +1955,11 @@ void create_gui() {
     gtk_tree_view_append_column(GTK_TREE_VIEW(blocked_queue_list), column);
     
     gtk_container_add(GTK_CONTAINER(blocked_scroll), blocked_queue_list);
-    gtk_widget_set_size_request(blocked_scroll, 230, 150);
     gtk_grid_attach(GTK_GRID(queue_grid), blocked_scroll, 1, 1, 1, 1);
+    
+    // Set blocked queue to expand
+    gtk_widget_set_hexpand(blocked_scroll, TRUE);
+    gtk_widget_set_vexpand(blocked_scroll, TRUE);
     
     // Create resource list
     GtkWidget *resource_frame = gtk_frame_new("Resources");
@@ -1748,7 +1994,10 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(resource_scroll), resource_list);
     gtk_container_add(GTK_CONTAINER(resource_frame), resource_scroll);
-    gtk_widget_set_size_request(resource_scroll, 500, 150);
+    
+    // Make resource list expand
+    gtk_widget_set_hexpand(resource_scroll, TRUE);
+    gtk_widget_set_vexpand(resource_scroll, TRUE);
     
     // Create console output
     GtkWidget *console_frame = gtk_frame_new("Console Output");
@@ -1765,7 +2014,7 @@ void create_gui() {
     // Set console background to black - using proper GTK3 style context
     GtkStyleContext *context = gtk_widget_get_style_context(console_text_view);
     GdkRGBA console_bg_color;
-    gdk_rgba_parse(&console_bg_color, "#000000");
+    gdk_rgba_parse(&console_bg_color, "#ffffff");
     gtk_style_context_add_class(context, "console-view");
     
     console_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(console_text_view));
@@ -1774,7 +2023,19 @@ void create_gui() {
     PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 12");
     GtkCssProvider *font_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(font_provider,
-        "textview { font-family: 'Monospace'; font-size: 12px; }", -1, NULL);
+        "textview { "
+    "    font-family: 'VT323', 'Courier', monospace; "
+    "    font-size: 14px; "
+    "    background-color: #000000; "
+    "    color: #ffffff; "
+    "    caret-color: #ffffff; "
+    "} "
+    "textview text { "
+    "    font-family: 'VT323', 'Courier', monospace; "
+    "    font-size: 14px; "
+    "    background-color: #000000; "
+    "    color: #ffffff; "
+    "}", -1, NULL);
     gtk_style_context_add_provider(
         gtk_widget_get_style_context(console_text_view),
         GTK_STYLE_PROVIDER(font_provider),
@@ -1784,7 +2045,10 @@ void create_gui() {
     
     gtk_container_add(GTK_CONTAINER(console_scroll), console_text_view);
     gtk_container_add(GTK_CONTAINER(console_frame), console_scroll);
-    gtk_widget_set_size_request(console_scroll, 500, 300);
+    
+    // Make console expand
+    gtk_widget_set_hexpand(console_scroll, TRUE);
+    gtk_widget_set_vexpand(console_scroll, TRUE);
     
     // Add process icons section (Xerox Star-like)
     GtkWidget *icons_frame = gtk_frame_new("Process Icons");
@@ -1819,21 +2083,44 @@ void create_gui() {
     
     gtk_grid_attach(GTK_GRID(sidebar), icons_frame, 0, 3, 1, 1);
     
-    // Create main notebook for switching between views
+    // Make sidebar not expand (fixed width)
+    gtk_widget_set_hexpand(sidebar, FALSE);
+    gtk_widget_set_vexpand(sidebar, TRUE);
+    
+    // Create main notebook for switching between views with expand properties
     GtkWidget *main_notebook = gtk_notebook_new();
+    gtk_widget_set_hexpand(main_notebook, TRUE);
+    gtk_widget_set_vexpand(main_notebook, TRUE);
     
     // Create "Default View" page
     GtkWidget *default_view = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(default_view), 10);
     gtk_grid_set_column_spacing(GTK_GRID(default_view), 10);
     gtk_container_set_border_width(GTK_CONTAINER(default_view), 10);
+    gtk_widget_set_hexpand(default_view, TRUE);
+    gtk_widget_set_vexpand(default_view, TRUE);
 
+    // Configure grid columns and rows to expand proportionally
+    gtk_grid_set_column_homogeneous(GTK_GRID(default_view), TRUE);
+    
     // Add existing views to default view
     gtk_grid_attach(GTK_GRID(default_view), memory_frame, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), process_frame, 0, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), queue_frame, 0, 2, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), resource_frame, 1, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(default_view), console_frame, 1, 1, 1, 2);
+    
+    // Set expansion properties for panels
+    gtk_widget_set_hexpand(memory_frame, TRUE);
+    gtk_widget_set_vexpand(memory_frame, TRUE);
+    gtk_widget_set_hexpand(process_frame, TRUE);
+    gtk_widget_set_vexpand(process_frame, TRUE);
+    gtk_widget_set_hexpand(queue_frame, TRUE);
+    gtk_widget_set_vexpand(queue_frame, TRUE);
+    gtk_widget_set_hexpand(resource_frame, TRUE);
+    gtk_widget_set_vexpand(resource_frame, TRUE);
+    gtk_widget_set_hexpand(console_frame, TRUE);
+    gtk_widget_set_vexpand(console_frame, TRUE);
 
     // Add default view to notebook
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), default_view, 
@@ -1841,7 +2128,13 @@ void create_gui() {
 
     // Memory View Tab
     GtkWidget *memory_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(memory_page, TRUE);
+    gtk_widget_set_vexpand(memory_page, TRUE);
+    
     GtkWidget *memory_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(memory_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(memory_scroll_tab, TRUE);
+    
     GtkWidget *memory_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(memory_store));
 
     // Copy columns from memory_list
@@ -1862,18 +2155,40 @@ void create_gui() {
 
     // Console View Tab
     GtkWidget *console_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(console_page, TRUE);
+    gtk_widget_set_vexpand(console_page, TRUE);
+    
     GtkWidget *console_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(console_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(console_scroll_tab, TRUE);
+    
+    // Share the same console buffer
     GtkWidget *console_text_view_tab = gtk_text_view_new_with_buffer(console_buffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(console_text_view_tab), FALSE);
+    gtk_text_view_set_monospace(GTK_TEXT_VIEW(console_text_view_tab), TRUE);
+
+    // Apply console styling
+    GtkStyleContext *console_tab_context = gtk_widget_get_style_context(console_text_view_tab);
+    gtk_style_context_add_class(console_tab_context, "console-view");
+    gtk_style_context_add_provider(console_tab_context,
+        GTK_STYLE_PROVIDER(font_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
     gtk_container_add(GTK_CONTAINER(console_scroll_tab), console_text_view_tab);
     gtk_box_pack_start(GTK_BOX(console_page), console_scroll_tab, TRUE, TRUE, 0);
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), console_page,
                             gtk_label_new("Console"));
 
-    // Queue View Tab
+    // Create Queue View Tab
     GtkWidget *queue_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(queue_page, TRUE);
+    gtk_widget_set_vexpand(queue_page, TRUE);
+    
     GtkWidget *queue_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(queue_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(queue_scroll_tab, TRUE);
+    
     GtkWidget *queue_grid_tab = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(queue_grid_tab), 10);
     gtk_grid_set_column_spacing(GTK_GRID(queue_grid_tab), 10);
@@ -1916,9 +2231,15 @@ void create_gui() {
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), queue_page,
                             gtk_label_new("Queues"));
 
-    // Resource View Tab
+    // Create Resource View Tab
     GtkWidget *resource_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(resource_page, TRUE);
+    gtk_widget_set_vexpand(resource_page, TRUE);
+    
     GtkWidget *resource_scroll_tab = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(resource_scroll_tab, TRUE);
+    gtk_widget_set_vexpand(resource_scroll_tab, TRUE);
+    
     GtkWidget *resource_list_tab = gtk_tree_view_new_with_model(GTK_TREE_MODEL(resource_store));
 
     // Copy columns from resource_list
@@ -1937,9 +2258,15 @@ void create_gui() {
     gtk_notebook_append_page(GTK_NOTEBOOK(main_notebook), resource_page,
                             gtk_label_new("Resources"));
 
-    // Add notebook to main grid
+    // Add notebook to main grid with proper expansion
     gtk_grid_attach(GTK_GRID(main_grid), main_notebook, 1, 0, 2, 3);
+    gtk_widget_set_hexpand(main_notebook, TRUE);
+    gtk_widget_set_vexpand(main_notebook, TRUE);
 
+    // Final window configuration
+    gtk_window_maximize(GTK_WINDOW(window));
+    gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+    
     // Display all widgets
     gtk_widget_show_all(window);
     
@@ -1958,56 +2285,133 @@ void create_gui() {
     console_printf("║  Click 'Start Auto' for continuous execution       ║\n");
     console_printf("╚════════════════════════════════════════════════════╝\n\n");
 }
+
 //dark mode
 void toggle_theme(GtkButton *button, gpointer user_data) {
     dark_mode = !dark_mode;
     
     // Update button label
-    gtk_button_set_label(GTK_BUTTON(theme_button), 
-                        dark_mode ? "Light Mode" : "Dark Mode");
+    GtkWidget *theme_box = gtk_bin_get_child(GTK_BIN(theme_button));
+    GtkWidget *theme_label = NULL;
+    
+    // Find the label widget in the box
+    GList *children = gtk_container_get_children(GTK_CONTAINER(theme_box));
+    while (children != NULL) {
+        GtkWidget *child = children->data;
+        if (GTK_IS_LABEL(child)) {
+            theme_label = child;
+            break;
+        }
+        children = children->next;
+    }
+    g_list_free(children);
+    
+    // Update the label text based on current mode
+    if (theme_label) {
+        gtk_label_set_text(GTK_LABEL(theme_label), dark_mode ? "Light Mode" : "Dark Mode");
+    }
+    
+    // Find the drawing area for the icon
+    GtkWidget *theme_icon = NULL;
+    children = gtk_container_get_children(GTK_CONTAINER(theme_box));
+    while (children != NULL) {
+        GtkWidget *child = children->data;
+        if (GTK_IS_DRAWING_AREA(child)) {
+            theme_icon = child;
+            break;
+        }
+        children = children->next;
+    }
+    g_list_free(children);
+    
+    // Redraw the icon if found
+    if (theme_icon) {
+        gtk_widget_queue_draw(theme_icon);
+    }
     
     // Create CSS with consistent font sizes
-    const char *theme_css = dark_mode ? 
-        "window { background-color: #1e1e1e; }"
-        "label { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button:hover { background-color: #3a3a3a; }"
-        "entry { background-color: #2a2a2a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
-        "combobox { color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
-        "combobox * { font-size: 14px !important; }"
-        "treeview { background-color: #1a1a1a; color: #c0c0c0; font-family: 'Monospace'; font-size: 14px !important; }"
-        "treeview:selected { background-color: #3a3a3a; }"
-        "textview { background-color: #000000; color: #00ff00; font-family: 'Monospace'; font-size: 14px !important; }"
-        "textview text { font-size: 14px !important; }" :
+    const char *theme_css = dark_mode ?
+        "window { background-color: #0d1117; }"
+        "frame { border-radius: 6px; border: 1px solid #30363d; margin: 5px; }"
+        "frame > label { color: #c9d1d9; background-color: #161b22; padding: 5px; }"
         
-        "window { background-color: #ffffff; }"
-        "label { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button { background-color: #e0e0e0; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "button:hover { background-color: #d0d0d0; }"
-        "entry { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "combobox { color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
+        "label { color: #c9d1d9; font-family: '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', sans-serif; font-size: 14px !important; }"
+        
+        "button { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px 12px; font-weight: 500; }"
+        "button:hover { background-color: #30363d; border-color: #8b949e; }"
+        "button:active { background-color: #282e33; }"
+        
+        "entry { background-color: #010409; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px; }"
+        "entry:focus { border-color: #1f6feb; }"
+        
+        "combobox { color: #c9d1d9; border-radius: 6px; border: 1px solid #30363d; background-color: #21262d; }"
+        "combobox:hover { border-color: #8b949e; }"
         "combobox * { font-size: 14px !important; }"
-        "treeview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "treeview:selected { background-color: #0077cc; color: #ffffff; }"
-        "textview { background-color: #ffffff; color: #000000; font-family: 'Monospace'; font-size: 14px !important; }"
-        "textview text { font-size: 14px !important; }";
+        "combobox button { border: none; }"
+        
+        "treeview { background-color: #0d1117; color: #c9d1d9; border: 1px solid #30363d; }"
+        "treeview:selected { background-color: #1f6feb; color: #ffffff; }"
+        "treeview header button { background-color: #161b22; color: #c9d1d9; font-weight: 600; border-bottom: 1px solid #30363d; }"
+        
+        "scrollbar { background-color: #0d1117; border-radius: 10px; }"
+        "scrollbar slider { background-color: #6e7681; border-radius: 10px; min-width: 8px; min-height: 8px; }"   
+        "scrollbar slider:hover { background-color: #6e7681; }"
+        
+        "textview { background-color: #0d1117; color: #58a6ff; border: 1px solid #30363d; border-radius: 6px; }"
+        "textview text { font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace; font-size: 14px !important; }" :
+        
+        /* LIGHT MODE - GitHub style */
+        "window { background-color: #ffffff; }"
+        "frame { border-radius: 6px; border: 1px solid #d0d7de; margin: 5px; }"
+        "frame > label { color: #24292f; background-color: #f6f8fa; padding: 5px; }"
+        
+        "label { color: #24292f; font-family: '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', sans-serif; font-size: 14px !important; }"
+        
+        "button { background-color: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; border-radius: 6px; padding: 5px 12px; font-weight: 500; }"
+        "button:hover { background-color: #f3f4f6; border-color: #afb8c1; }"
+        "button:active { background-color: #ebecf0; }"
+        
+        "entry { background-color: #ffffff; color: #24292f; border: 1px solid #d0d7de; border-radius: 6px; padding: 5px; }"
+        "entry:focus { border-color: #0969da; }"
+        
+        "combobox { color: #24292f; border-radius: 6px; border: 1px solid #d0d7de; background-color: #f6f8fa; }"
+        "combobox:hover { border-color: #afb8c1; }"
+        "combobox * { font-size: 14px !important; }"
+        "combobox button { border: none; }"
+        
+        "treeview { background-color: #ffffff; color: #24292f; border: 1px solid #d0d7de; }"
+        "treeview:selected { background-color: #0969da; color: #ffffff; }"
+        "treeview header button { background-color: #f6f8fa; color: #24292f; font-weight: 600; border-bottom: 1px solid #d0d7de; }"
+        
+        "scrollbar { background-color: #ffffff; border-radius: 10px; }"
+        "scrollbar slider { background-color: #d0d7de; border-radius: 10px; min-width: 8px; min-height: 8px; }"
+        "scrollbar slider:hover { background-color: #afb8c1; }"
+        
+        "textview { background-color: #ffffff; color: #0969da; border: 1px solid #d0d7de; border-radius: 6px; }"
+        "textview text { font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace; font-size: 14px !important; }";
+    
     
     // Apply theme
     gtk_css_provider_load_from_data(provider, theme_css, -1, NULL);
     
-    // Force consistent console font
+
+    // Force consistent console font with terminal-like colors
     GtkCssProvider *console_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(console_provider,
-        "textview, textview text { font-family: 'Monospace'; font-size: 14px !important; }", -1, NULL);
-    gtk_style_context_add_provider(
+        dark_mode ?
+        "textview.console-view, textview.console-view text { font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace; font-size: 14px !important; background-color: #0d1117; color: #7ee787; }" :
+        "textview.console-view, textview.console-view text { font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace; font-size: 14px !important; background-color: #f6f8fa; color: #0550ae; }",
+        -1, NULL);
+    // Force consistent console font
+        gtk_style_context_add_provider(
         gtk_widget_get_style_context(console_text_view),
         GTK_STYLE_PROVIDER(console_provider),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(console_provider);
     
-    console_printf("[Clock: %d] Switched to %s theme\n", 
-                  system_clock, 
-                  dark_mode ? "dark" : "light");
+    console_printf("[Clock: %d] Switched to %s theme\n",
+        system_clock,
+        dark_mode ? "dark" : "light");
 }
 // Function to draw process icons
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
@@ -2144,4 +2548,3 @@ int main(int argc, char *argv[]) {
     
     return 0;
 }
-
