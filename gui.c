@@ -856,27 +856,6 @@ int compare(const void *a, const void *b) {
 //     return 0;
 // }
 
-// Declare extern functions and variables from main.c
-extern void run_clock_cycle();
-extern void init();
-extern void print_memory();
-extern void init_queues();
-extern void init_mutex();
-extern void init_memory();
-extern int create_process(const char *program);
-extern int system_clock;
-extern PCB current_process;
-extern int scheduling;
-extern int round_robin_quantum;
-extern MemoryWord memory[MEMORY_SIZE];
-extern queue ready_queue[READY_QUEUE_SIZE];
-extern PriorityQueue blocked_queue[MAX_MUTEXES];
-extern mutex mutexes[MAX_MUTEXES];
-extern int process_count;
-extern int memory_allocated;
-extern int program_index;
-extern int total_programs;
-extern program programs[MAX_PROCESSES];
 
 // const char *light_theme_css = "window { background-color: #ffffff; }"
 //     "label { color: #000000; }"
@@ -902,7 +881,6 @@ extern program programs[MAX_PROCESSES];
 // Auto execution
 gboolean auto_execution = FALSE;
 guint auto_timeout_id = 0;
-
 // CSS Provider
 GtkCssProvider *provider;
 
