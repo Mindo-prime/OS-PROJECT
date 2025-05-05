@@ -89,10 +89,6 @@ typedef struct {
 ProcessIcon process_icons[MAX_PROCESSES];
 
 
-// Added global clock
-int scheduling = FIFO;
-int system_clock = 1;
-
 
 typedef struct {
     char name[MAX_NAME_LENGTH];
@@ -152,6 +148,9 @@ void print_memory();
 void update_gui(void);
 void console_printf(const char *format, ...);
 
+// Added global clock
+int scheduling = FIFO;
+int system_clock = 0;
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
 int MY_clock = 0;
@@ -1118,7 +1117,7 @@ void reset_simulation() {
     gtk_text_buffer_set_text(console_buffer, "", -1);
     
     // Reset simulation variables
-    system_clock = 1;
+    system_clock = 0;
     total_programs = 0;
     program_index = 0;
     process_count = 0;
@@ -1539,6 +1538,7 @@ gboolean draw_reset_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
     
     // Draw reset icon (circular arrow)
     cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    //after "some touch ups" commit M_PI is claimed as undefined however i will not touch cuz i din't right this ~Fady
     cairo_arc(cr, width/2, height/2, width * 0.3, 0, 2 * M_PI);
     cairo_stroke(cr);
     
