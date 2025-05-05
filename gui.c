@@ -420,6 +420,7 @@ void process_assign(char *args) {
         char *file_content = process_read_file(path);
         if (file_content != NULL) {
             set_variable(name, file_content);
+            console_printf("[Clock: %d] Process %d: read file %s succesfully\n", system_clock, current_process.process_id, filepath); 
         } else {
             console_printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, current_process.process_id, filepath);
         }
@@ -432,9 +433,12 @@ void process_assign(char *args) {
         char *var_value = get_variable_value(rest);
         if (var_value != NULL) {
             set_variable(name, var_value);
+            console_printf("[Clock: %d] Process %d: set variable %s to %s succesfully\n", system_clock, current_process.process_id, name,var_value); 
+       
         } else {
             // Direct value assignment
             set_variable(name, rest);
+            console_printf("[Clock: %d] Process %d: set variable %s to %s succesfully\n", system_clock, current_process.process_id, name,rest); 
         }
     }
 }
@@ -480,7 +484,6 @@ void process_print_from_to(char* args){
     console_printf("[Clock: %d] Process %d: num_1 = %s, num_2 = %s, a = %d b = %d \n", system_clock, current_process.process_id, num_1, num_2, a, b);
     for (int i = a; i <= b; i++){
         console_printf("%i\n", i);
-        console_printf("%i, ",i);
     }
     console_printf("\n");
     console_printf("\n");
@@ -1503,7 +1506,7 @@ gboolean draw_reset_icon(GtkWidget *widget, cairo_t *cr, gpointer data) {
     
     // Draw reset icon (circular arrow)
     cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
-    //after "some touch ups" commit M_PI is claimed as undefined however i will not touch cuz i din't right this ~Fady
+    //M_PI is defined in math.h lib
     cairo_arc(cr, width/2, height/2, width * 0.3, 0, 2 * M_PI);
     cairo_stroke(cr);
     
