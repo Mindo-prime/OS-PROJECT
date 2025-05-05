@@ -1,0 +1,19 @@
+Run_Clock_Cycle():
+ This Method simulates a single clock cycle by checking first if new proccesses are to arrive at the current clock cycle and creates them using create process if needed. It then runs the scheduler to determine which process is to be executed next then it calls execute_line() to execute one program line from the current process.
+
+check_for_processes():
+  if a process is to arrive the current clock cycle it creates it using create_process()
+
+create_process(char* program):
+ Allocates memory to the given program and Initializes that memory. 
+ First NUM_PCB lines stores process data such as ID,Priority,memory bound,name etc
+ the following lines store the Program code with each memory word storing one line
+ the last 3 lines would be reserved for variables
+
+schedule():
+ based on the current scheduling(this and all variable names/methods should be in italic/bold) variable which stores the scheduling algorithm currently in use(FIFO/Round roubin/ Multilevel feedbackqueue). It decides which proccess is to be currently executed by setting the global variable current_process and places the old process in the appropriate ready queue in addition to resting the quantum tracker
+
+switch_context(queue* source, queue* destination):
+ used by schedule to place yhe process of the last clock cycle in the destination queue and to take the next process to be executed from the source queue
+ 
+  
