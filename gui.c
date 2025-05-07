@@ -148,9 +148,7 @@ int scheduling = FIFO;
 int system_clock = 0;
 int round_robin_quantum = 2;
 int quantum_tracking = 0;
-int MY_clock = 0;
 int is_current_process_blocked = 0;
-int programs_size = 4;
 int process_count = 0;
 int total_programs = 0;
 int program_index = 0;
@@ -250,7 +248,7 @@ void unblock_process(int mutex_index) {
     }
     if (blocked_queue[mutex_index].size > 0) {
         PCB unblocked_process = load_PCB(dequeue(&blocked_queue[mutex_index]));
-        console_printf("[Clock: %d] Process %d unblocked\n", system_clock, unblocked_process.process_id);
+        console_printf("[Clock: %d] Process %d: Unblocked\n", system_clock, unblocked_process.process_id);
         int offset = unblocked_process.lower_bound;
         strcpy(memory[offset + 1].value, "READY");
         //printf("changed address %d to READY\n", offset + 1);
@@ -268,12 +266,12 @@ void sem_wait_resource(char *name) {
     }
     
      if (mutexes[idx].value < 0) {
-        console_printf("[Clock: %d] Process %d blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
+        console_printf("[Clock: %d] Process %d: Blocked, resource %s unavailable\n", system_clock, current_process.process_id, name);
         block_process(idx);
         
     } else {
         mutexes[idx].value=-1;
-        console_printf("[Clock: %d] Process %d: resource %s acquired\n", system_clock, current_process.process_id, name);
+        console_printf("[Clock: %d] Process %d: Resource %s acquired\n", system_clock, current_process.process_id, name);
         //printf("mutex[%d] = %d\n",idx,mutexes[idx].value);
     }
     
@@ -287,7 +285,7 @@ void sem_signal_resource(char *name) {
         return;
     }
    
-    console_printf("[Clock: %d] Process %d: resource %s released\n", system_clock, current_process.process_id, name);
+    console_printf("[Clock: %d] Process %d: Resource %s released\n", system_clock, current_process.process_id, name);
     if (mutexes[idx].value <= 0) {
         if (blocked_queue[idx].size ==0) {
             mutexes[idx].value=1;
@@ -336,7 +334,6 @@ void set_variable(char *name, char *value) {
     }
 }
 
-//chatGPT
 char *process_read_file(const char *path) {    
     static char buf[MAX_FILE_BUFFER];
     FILE *f = fopen(path, "r");
@@ -358,7 +355,7 @@ void process_print(char * args) {
         console_printf("[Clock: %d] Process %d: value not found %s\n", system_clock, current_process.process_id, args);
     }
 }
-//chatgpt 
+
 void process_assign(char *args) {    
     // First, check if args is NULL
     if (args == NULL) {
@@ -420,7 +417,7 @@ void process_assign(char *args) {
         char *file_content = process_read_file(path);
         if (file_content != NULL) {
             set_variable(name, file_content);
-            console_printf("[Clock: %d] Process %d: read file %s succesfully\n", system_clock, current_process.process_id, filepath); 
+            console_printf("[Clock: %d] Process %d: Read file %s succesfully\n", system_clock, current_process.process_id, filepath); 
         } else {
             console_printf("[Clock: %d] Process %d: Error: Failed to read file %s\n", system_clock, current_process.process_id, filepath);
         }
@@ -747,7 +744,7 @@ void run_clock_cycle() {
     current_process.program_counter++;
     char program_done = current_process.program_counter == current_process.lower_bound + current_process.code_size + NUM_PCB;
     if (program_done) {
-        console_printf("[Clock: %d] Process %d terminated\n", system_clock, current_process.process_id);
+        console_printf("[Clock: %d] Process %d: Terminated\n", system_clock, current_process.process_id);
     }
     int offset = current_process.lower_bound;
     sprintf(memory[offset + 3].value, "%d", current_process.program_counter);
