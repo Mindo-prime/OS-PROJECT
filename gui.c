@@ -1,4 +1,4 @@
-//gcc gui2.c queue.c PriorityQueue.c -o gui2 `pkg-config --cflags --libs gtk+-3.0` -lfontconfig -lm
+//gcc gui.c queue.c PriorityQueue.c -o gui `pkg-config --cflags --libs gtk+-3.0` -lfontconfig -lm
 #include <gtk/gtk.h>
 #include <pango/pango.h>
 #include <stdlib.h>
