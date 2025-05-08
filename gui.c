@@ -11,18 +11,17 @@
 #include "queue.h"
 #include "PriorityQueue.h"
 //#include <stdbool.h>  // Added for bool type
-//#include "uthash.h"// didnt work at all sad
 
 //#define TEST_MODE 0
 #define MAX_LINE_LENGTH 1024
-#define MAX_VARS_PER 3  // look i am not sure here but it isnt i wish we used c++
+#define MAX_VARS_PER 3  
 #define MAX_NAME_LENGTH 50
 #define MAX_VALUE_LENGTH 1024
-#define MEMORY_SIZE 60 // Because we need 60 words bruh 
+#define MEMORY_SIZE 60
 #define MAX_PROCESSES 6 // only three i think for now
-#define NUM_PCB 5 //NUmber of vaariables in the PCB guys we might need to increase it UwU - increased to 8 for arrival and completion time
-#define READY_QUEUE_SIZE 4 // max amount of ready queues
-#define MAX_MUTEXES 3 //max amount of mutexes
+#define NUM_PCB 5 // Number of fields in PCB
+#define READY_QUEUE_SIZE 4 // Max amount of ready queues
+#define MAX_MUTEXES 3 // Max amount of mutexes
 #define MAX_FILE_BUFFER 10000
 #define ROUND_ROBIN 1
 #define FIFO 2
@@ -109,8 +108,7 @@ typedef enum {
     VAR,
     CODE,
     T_PCB,
-    GAY,
-    MINDO
+    UNINITIALIZED
 } MemType;
 
 // Memory word
@@ -601,12 +599,12 @@ void schedule() {
 
 int create_process(const char *program) {
     if (process_count >= MAX_PROCESSES) {
-        console_printf("[Clock: %d] Error: Out of process slots (Ask MINDO)\n", system_clock);
+        console_printf("[Clock: %d] Error: Out of process slots\n", system_clock);
         total_programs--;
         return -1;
     }
     if (memory_allocated >= MEMORY_SIZE){
-        console_printf("[Clock: %d] Error: Out of memory (Ask Ahmed Hassan)\n", system_clock);
+        console_printf("[Clock: %d] Error: Out of memory\n", system_clock);
         total_programs--;
         return -1;
     }
@@ -628,8 +626,6 @@ int create_process(const char *program) {
         fclose(fptr);
         return -1;
     }
-    // printf("[Clock: %d] line_count = %d, NUM_PCB = %d, MAX_VARS_PER = %d, total = %d\n", 
-    //        system_clock, line_count, NUM_PCB, MAX_VARS_PER, line_count + NUM_PCB + MAX_VARS_PER);
     
     int pid = process_count + 1;
     int start_index = memory_allocated;
@@ -756,7 +752,7 @@ void init_memory() {
         memory[i].name[0] = '\0';
         memory[i].value[0] = '\0';
         memory[i].process_id = -1;  // -1 indicates free memory not with any process
-        memory[i].type = MINDO;
+        memory[i].type = UNINITIALIZED;
     }
     memory_allocated = 0;
 }
@@ -782,66 +778,6 @@ void init() {
 int compare(const void *a, const void *b) {
     return ((program *)a)->arrival_time - ((program *)b)->arrival_time;
 }
-
-// int main(void) {
-//     system_clock = 1;  // Initialize system clock
-//     init();
-    
-//     printf("[Clock: %d] System initialized\n", system_clock);
-//     print_memory();
-    
-//     char buffer[1024];
-//     while (total_programs < MAX_PROCESSES) {
-//         printf("Enter process name (or \"done\") - maximum of %d processes: ", MAX_PROCESSES);
-//         if (!fgets(buffer, MAX_NAME_LENGTH, stdin)) break;
-//         buffer[strcspn(buffer, "\n")] = '\0';
-//         if (strcmp(buffer, "done") == 0) break;
-//         programs[total_programs].name =  (char*) malloc(strlen(buffer));
-//         strcpy(programs[total_programs].name, buffer);
-
-//         printf("Enter arrival time: ");
-//         if (scanf("%d", &programs[total_programs].arrival_time) != 1) break;
-//         getchar();
-
-//         total_programs++;
-//     }
-
-    
-
-//     qsort(programs, total_programs, sizeof(program), compare);
-//     print_memory();
-//     while (1) {
-//         run_clock_cycle();
-//         if (current_process.process_id == -1 && program_index == total_programs) {
-//             break;
-//         }
-//     }
-    
-//     printf("[Clock: %d] All processes completed\n", system_clock);
-//     return 0;
-// }
-
-
-// const char *light_theme_css = "window { background-color: #ffffff; }"
-//     "label { color: #000000; }"
-//     "button { background-color: #e0e0e0; color: #000000; }"
-//     "button:hover { background-color: #d0d0d0; }"
-//     "entry { background-color: #ffffff; color: #000000; }"
-//     "combobox { color: #000000; }"
-//     "treeview { background-color: #ffffff; color: #000000; }"
-//     "treeview:selected { background-color: #0077cc; color: #ffffff; }"
-//     "textview { background-color: #ffffff; color: #000000; }";
-
-// const char *dark_theme_css = "window { background-color: #1e1e1e; }"
-//     "label { color: #c0c0c0; }"
-//     "button { background-color: #2a2a2a; color: #c0c0c0; }"
-//     "button:hover { background-color: #3a3a3a; }"
-//     "entry { background-color: #2a2a2a; color: #c0c0c0; }"
-//     "combobox { color: #c0c0c0; }"
-//     "treeview { background-color: #1a1a1a; color: #c0c0c0; }"
-//     "treeview:selected { background-color: #3a3a3a; }"
-//     "textview { background-color: #000000; color: #00ff00; }";
-
 
 // Auto execution
 gboolean auto_execution = FALSE;
@@ -1014,29 +950,6 @@ void on_quantum_changed(GtkSpinButton *spin_button, gpointer data) {
     round_robin_quantum = gtk_spin_button_get_value_as_int(spin_button);
     console_printf("[Clock: %d] Round Robin quantum set to %d\n", system_clock, round_robin_quantum);
 }
-
-
-// Update all GUI components
-// void update_gui() {
-//     char buffer[128];
-    
-//     // Update clock and process count
-//     sprintf(buffer, "System Clock: %d", system_clock);
-//     gtk_label_set_text(GTK_LABEL(clock_label), buffer);
-    
-//     sprintf(buffer, "Process Count: %d/%d", process_count, MAX_PROCESSES);
-//     gtk_label_set_text(GTK_LABEL(process_count_label), buffer);
-    
-//     // Update views
-//     update_memory_view();
-//     update_process_list();
-//     update_queue_lists();
-//     update_resource_list();
-    
-//     // Process events to update UI
-//     while (gtk_events_pending())
-//         gtk_main_iteration();
-// }
 
 // Function to draw process icons (forward declaration before create_gui)
 gboolean draw_process_icon(GtkWidget *widget, cairo_t *cr, gpointer data);
